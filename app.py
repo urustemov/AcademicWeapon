@@ -159,7 +159,79 @@ async def student_task_status(task_id:int, request:Request):
     status='Completed' if task['status']!='Completed' else 'To Do'
     run('UPDATE tasks SET status=? WHERE id=?',(status,task_id))
     record(session['user']['id'],f'Student task #{task_id} status to {status}')
-    return bounce('/student/plan')
+    return bounce('/student/plan#tasks')
+
+
+@app.post('/student/task')
+async def student_create_task(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    title=str(form.get('title','')).strip()
+    details=str(form.get('details','')).strip()
+    due_date=str(form.get('due_date','')).strip()
+    priority=str(form.get('priority','Medium')).strip()
+    status=str(form.get('status','To Do')).strip()
+    if not title or not due_date:return bounce('/student/plan#tasks')
+    if priority not in ('Low','Medium','High'):priority='Medium'
+    if status not in ('To Do','In Progress','Completed'):status='To Do'
+    run('INSERT INTO tasks(student_id,title,details,due_date,priority,status,source) VALUES (?,?,?,?,?,?,?)',
+        (sid,title,details,due_date,priority,status,'student'))
+    record(session['user']['id'],f'Student created own task: {title}')
+    return bounce('/student/plan#tasks')
+
+
+@app.post('/student/task/{task_id}/edit')
+async def student_edit_task(task_id:int, request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    task=one('SELECT * FROM tasks WHERE id=? AND student_id=?',(task_id,sid))
+    if not task:raise HTTPException(404)
+    title=str(form.get('title',task['title'])).strip() or task['title']
+    details=str(form.get('details',task['details'])).strip()
+    due_date=str(form.get('due_date',task['due_date'])).strip() or task['due_date']
+    priority=str(form.get('priority',task['priority'])).strip()
+    status=str(form.get('status',task['status'])).strip()
+    if priority not in ('Low','Medium','High'):priority=task['priority']
+    if status not in ('To Do','In Progress','Completed'):status=task['status']
+    run('UPDATE tasks SET title=?,details=?,due_date=?,priority=?,status=? WHERE id=?',
+        (title,details,due_date,priority,status,task_id))
+    record(session['user']['id'],f'Student edited task #{task_id}')
+    return bounce('/student/plan#tasks')
+
+
+@app.post('/student/task/{task_id}/update_fields')
+async def student_update_task_fields(task_id:int, request:Request):
+    """Quick inline update: priority and/or status only."""
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    task=one('SELECT * FROM tasks WHERE id=? AND student_id=?',(task_id,sid))
+    if not task:raise HTTPException(404)
+    priority=str(form.get('priority',task['priority'])).strip()
+    status=str(form.get('status',task['status'])).strip()
+    if priority not in ('Low','Medium','High'):priority=task['priority']
+    if status not in ('To Do','In Progress','Completed'):status=task['status']
+    run('UPDATE tasks SET priority=?,status=? WHERE id=?',(priority,status,task_id))
+    record(session['user']['id'],f'Student updated fields task #{task_id}: {priority}/{status}')
+    return bounce('/student/plan#tasks')
+
+
+@app.post('/student/task/{task_id}/delete')
+async def student_delete_task(task_id:int, request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    task=one('SELECT * FROM tasks WHERE id=? AND student_id=?',(task_id,sid))
+    if not task:raise HTTPException(404)
+    run('DELETE FROM tasks WHERE id=?',(task_id,))
+    record(session['user']['id'],f'Student deleted own task #{task_id}')
+    return bounce('/student/plan#tasks')
 
 
 @app.get('/student/checkin')
@@ -196,6 +268,113 @@ def student_meetings(request:Request):
     if not session:return bounce('/login')
     meetings=all_rows('SELECT * FROM meetings WHERE student_id=? ORDER BY date DESC',(session['user']['student_id'],))
     return page(request,'student_meetings.html',active='student_meetings',meetings=meetings)
+
+
+@app.get('/student/deadlines')
+def student_deadlines(request: Request):
+    session = gate(request, 'student')
+    if not session:
+        return bounce('/login')
+    sid = session['user']['student_id']
+    deadlines = all_rows('SELECT * FROM deadlines WHERE student_id=? ORDER BY CASE WHEN status="Completed" THEN 1 ELSE 0 END, due_date, due_time', (sid,))
+
+    # Group and stack deadlines by course to calculate earned grade percentages per course
+    courses_map = {}
+    for d in deadlines:
+        raw_name = d['course'].strip()
+        key = raw_name.lower()
+        if key not in courses_map:
+            courses_map[key] = {
+                'name': raw_name,
+                'total_weight': 0,
+                'earned_weight': 0,
+                'pending_weight': 0,
+                'total_count': 0,
+                'completed_count': 0,
+                'pending_count': 0,
+            }
+        courses_map[key]['total_count'] += 1
+        courses_map[key]['total_weight'] += d['weight']
+        if d['status'] == 'Completed':
+            courses_map[key]['earned_weight'] += d['weight']
+            courses_map[key]['completed_count'] += 1
+        else:
+            courses_map[key]['pending_weight'] += d['weight']
+            courses_map[key]['pending_count'] += 1
+
+    courses_summary = sorted(courses_map.values(), key=lambda c: c['name'].lower())
+    completed_count = sum(1 for d in deadlines if d['status'] == 'Completed')
+    pending_count = len(deadlines) - completed_count
+
+    return page(request, 'deadlines.html', active='student_deadlines',
+                deadlines=deadlines, courses_summary=courses_summary,
+                completed_count=completed_count, pending_count=pending_count,
+                today=date.today().isoformat())
+
+
+@app.post('/student/deadline')
+async def student_add_deadline(request: Request):
+    session = gate(request, 'student')
+    if not session:
+        return bounce('/login')
+    form = await request.form()
+    verify_csrf(request, session, form)
+    course = str(form.get('course', '')).strip()[:100]
+    topic = str(form.get('topic', '')).strip()[:150]
+    due_date = str(form.get('due_date', ''))
+    due_time = str(form.get('due_time', '23:59')).strip()[:10] or '23:59'
+    try:
+        weight = int(form.get('weight', 10))
+        if weight < 0 or weight > 100:
+            weight = 10
+    except (ValueError, TypeError):
+        weight = 10
+
+    if not course or not topic:
+        raise HTTPException(400, 'Course and assignment topic are required')
+    try:
+        date.fromisoformat(due_date)
+    except ValueError:
+        raise HTTPException(400, 'Invalid deadline date')
+
+    sid = session['user']['student_id']
+    run('INSERT INTO deadlines(student_id, course, topic, due_date, due_time, weight) VALUES (?,?,?,?,?,?)',
+        (sid, course, topic, due_date, due_time, weight))
+    record(session['user']['id'], f'Added deadline for {course}: {topic} ({weight}%)')
+    return bounce('/student/deadlines')
+
+
+@app.post('/student/deadline/{deadline_id}/toggle')
+async def student_toggle_deadline(deadline_id: int, request: Request):
+    session = gate(request, 'student')
+    if not session:
+        return bounce('/login')
+    form = await request.form()
+    verify_csrf(request, session, form)
+    sid = session['user']['student_id']
+    item = one('SELECT * FROM deadlines WHERE id=? AND student_id=?', (deadline_id, sid))
+    if not item:
+        raise HTTPException(404, 'Deadline not found')
+    new_status = 'Pending' if item['status'] == 'Completed' else 'Completed'
+    run('UPDATE deadlines SET status=? WHERE id=?', (new_status, deadline_id))
+    record(session['user']['id'], f'Updated deadline #{deadline_id} status to {new_status}')
+    return bounce('/student/deadlines')
+
+
+@app.post('/student/deadline/{deadline_id}/delete')
+async def student_delete_deadline(deadline_id: int, request: Request):
+    session = gate(request, 'student')
+    if not session:
+        return bounce('/login')
+    form = await request.form()
+    verify_csrf(request, session, form)
+    sid = session['user']['student_id']
+    item = one('SELECT * FROM deadlines WHERE id=? AND student_id=?', (deadline_id, sid))
+    if not item:
+        raise HTTPException(404, 'Deadline not found')
+    run('DELETE FROM deadlines WHERE id=? AND student_id=?', (deadline_id, sid))
+    record(session['user']['id'], f'Deleted deadline #{deadline_id}')
+    return bounce('/student/deadlines')
 
 
 @app.get('/aac')
@@ -245,23 +424,6 @@ def allowed_student(student_id):
     if not one('SELECT id FROM students WHERE id=?',(student_id,)):
         raise HTTPException(404,'Student not found')
 
-
-@app.post('/aac/student/{student_id}/task')
-async def aac_add_task(student_id:int,request:Request):
-    session=gate(request,'aac')
-    if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id)
-    title=str(form.get('title','')).strip()[:140]
-    if not title:raise HTTPException(400,'Title required')
-    due=str(form.get('due_date',''))
-    try:date.fromisoformat(due)
-    except ValueError:raise HTTPException(400,'Invalid due date')
-    priority=str(form.get('priority','Medium'))
-    if priority not in ('Low','Medium','High'):priority='Medium'
-    run('INSERT INTO tasks(student_id,title,details,due_date,priority) VALUES (?,?,?,?,?)',
-        (student_id,title,str(form.get('details','')).strip()[:350],due,priority))
-    record(session['user']['id'],f'Created task for demo student #{student_id}')
-    return bounce(f'/aac/student/{student_id}#tasks')
 
 
 @app.post('/aac/student/{student_id}/goal')
@@ -322,19 +484,6 @@ async def aac_update_case_status(student_id:int,request:Request):
     return bounce(f'/aac/student/{student_id}')
 
 
-@app.post('/aac/task/{task_id}/status')
-async def aac_update_task(task_id:int,request:Request):
-    session=gate(request,'aac')
-    if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form)
-    task=one('SELECT * FROM tasks WHERE id=?',(task_id,))
-    if not task:raise HTTPException(404)
-    status=str(form.get('status',''))
-    if status not in ('To Do','In Progress','Completed'):raise HTTPException(400)
-    run('UPDATE tasks SET status=? WHERE id=?',(status,task_id))
-    record(session['user']['id'],f'Changed task #{task_id} to {status}')
-    return bounce(f"/aac/student/{task['student_id']}#tasks")
-
 
 @app.post('/aac/followup/{followup_id}/resolve')
 async def aac_resolve_followup(followup_id:int,request:Request):
@@ -368,4 +517,4 @@ def aac_activity(request:Request):
 if __name__=='__main__':
     import uvicorn
     print('\nACADEMIC WEAPON LOCAL DEMO: http://127.0.0.1:8000\nThis app uses SYNTHETIC data only. Do not enter real academic records.\n')
-    uvicorn.run(app,host='127.0.0.1',port=8000,log_level='warning')
+    uvicorn.run('app:app',host='127.0.0.1',port=8000,reload=True,log_level='warning')

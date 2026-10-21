@@ -1,25 +1,203 @@
 {% extends 'base.html' %}
-{% block title %}AAC Overview{% endblock %}{% block crumb %}AAC Overview{% endblock %}
+{% block title %}AAC Overview{% endblock %}
+{% block crumb %}AAC Overview{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow dark">AAC WORKSPACE · FALL SEMESTER</div><h1>Academic support overview <span class="wave">✳</span></h1><p>Track student progress, identify follow-ups, and keep everyone moving forward.</p></div><a href="/aac/students" class="primary-btn">Manage students <span>↗</span></a></div>
-<div class="stats-grid four">
- <div class="stat-card"><span class="stat-label">TOTAL STUDENTS <span class="stat-icon">♙</span></span><div class="stat-big">{{stat.students}}</div><div class="stat-foot">In support program <span class="subtle-pill">Demo</span></div></div>
- <div class="stat-card"><span class="stat-label">ACTIVE PLANS <span class="stat-icon">☷</span></span><div class="stat-big">{{stat.active}}</div><div class="stat-foot">In progress</div></div>
- <div class="stat-card"><span class="stat-label">OPEN FOLLOW-UPS <span class="stat-icon">◷</span></span><div class="stat-big">{{stat.followups}}</div><div class="stat-foot">Awaiting AAC action</div></div>
- <div class="stat-card"><span class="stat-label">NEEDS REVIEW <span class="stat-icon">◇</span></span><div class="stat-big">{{stat.review}}</div><div class="stat-foot">Require a closer look</div></div>
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">AAC WORKSPACE · FALL SEMESTER</div>
+    <h1>Academic Support Overview <span class="wave">✦</span></h1>
+    <p>Track student progress, coordinate individual recovery plans, and keep follow-ups on schedule.</p>
+  </div>
+  <a href="/aac/students" class="primary-btn">
+    <span>Manage Students</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+  </a>
 </div>
+
+<!-- 4 Top KPI Cards -->
+<div class="stats-grid four">
+  <div class="stat-card">
+    <div class="stat-label">
+      <span>Total Students</span>
+      <span class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+      </span>
+    </div>
+    <div class="stat-big">{{ stat.students }}</div>
+    <div class="stat-foot">
+      <span>In support program</span>
+      <span class="subtle-pill">Cohort</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">
+      <span>Active Plans</span>
+      <span class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+      </span>
+    </div>
+    <div class="stat-big">{{ stat.active }}</div>
+    <div class="stat-foot">
+      <span>In active progress</span>
+      <span class="subtle-pill">Recovery</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">
+      <span>Open Follow-ups</span>
+      <span class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      </span>
+    </div>
+    <div class="stat-big">{{ stat.followups }}</div>
+    <div class="stat-foot">
+      <span>Awaiting advisor action</span>
+      <span class="subtle-pill">Queue</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">
+      <span>Needs Review</span>
+      <span class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      </span>
+    </div>
+    <div class="stat-big">{{ stat.review }}</div>
+    <div class="stat-foot">
+      <span>Require closer review</span>
+      <span class="subtle-pill">Priority</span>
+    </div>
+  </div>
+</div>
+
 <div class="two-columns wide-left">
- <div class="stack">
-  <section class="panel"><div class="panel-heading"><div><span class="section-overline">CASE MANAGEMENT</span><h2>Students at a glance</h2></div><a class="text-link" href="/aac/students">View all students →</a></div>
-   <div class="table-scroll"><table class="data-table compact-table"><thead><tr><th>Student</th><th>Support case</th><th>Attention</th><th></th></tr></thead><tbody>
-   {% for s in students[:5] %}<tr><td><div class="person-cell"><span class="person-avatar">{{s.avatar}}</span><div><strong>{{s.name}}</strong><span>{{s.program}}</span></div></div></td><td><span class="status {{s.status|lower|replace(' ','-')}}">{{s.status}}</span></td><td><span class="attention {{s.attention|lower|replace(' ','-')}}">{{s.attention}}</span></td><td><a class="arrow-link" href="/aac/student/{{s.id}}">↗</a></td></tr>{% endfor %}
-   </tbody></table></div></section>
-  <section class="panel"><div class="panel-heading"><div><span class="section-overline">UPCOMING</span><h2>Advisor meetings</h2></div></div>{% for meeting in meetings %}<a class="meeting-item link-row" href="/aac/student/{{meeting.student_id}}#meetings"><span class="meeting-calendar"><b>{{meeting.date[8:10]}}</b><small>DAY</small></span><div><strong>{{meeting.name}} · {{meeting.topic}}</strong><span>{{meeting.date|nice_date}}</span></div><span class="arrow-link">↗</span></a>{% else %}<p class="empty-state">No upcoming meetings scheduled.</p>{% endfor %}</section>
- </div>
- <div class="stack">
-  <section class="panel"><div class="panel-heading"><div><span class="section-overline">ACTION REQUIRED</span><h2>Follow-up queue</h2></div><span class="count-bubble">{{stat.followups}}</span></div>
-   {% for f in followups %}<a class="followup-item link-row" href="/aac/student/{{f.sid}}#followups"><div class="followup-icon {{f.priority|lower}}">{{'!' if f.priority=='High' else '↻'}}</div><div><strong>{{f.name}}</strong><p>{{f.title}}</p><span>Due {{f.due_date|nice_date}}</span></div><span class="arrow-link">↗</span></a>{% else %}<div class="empty-state">No open follow-ups.</div>{% endfor %}</section>
-  <div class="insight-card"><span class="section-overline">A BETTER WAY TO SUPPORT</span><h2>Every student deserves a clear next step.</h2><p>Use personalized recovery plans, check-ins and coordinated AAC support to build a consistent student experience.</p><a href="/aac/plans">Explore recovery plans ↗</a></div>
- </div>
+  <!-- Left Column: Quick Case Directory & Meetings -->
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">CASE MANAGEMENT</span>
+          <h2>Students at a glance</h2>
+        </div>
+        <a class="text-link" href="/aac/students">
+          <span>View all students</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+
+      <div class="table-scroll">
+        <table class="data-table compact-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Support Case</th>
+              <th>Attention</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students[:5] %}
+            <tr>
+              <td>
+                <div class="person-cell">
+                  <span class="person-avatar">{{ s.avatar }}</span>
+                  <div>
+                    <strong>{{ s.name }}</strong>
+                    <span>{{ s.program }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="status {{ s.status|lower|replace(' ', '-') }}">{{ s.status }}</span>
+              </td>
+              <td>
+                <span class="attention {{ s.attention|lower|replace(' ', '-') }}">{{ s.attention }}</span>
+              </td>
+              <td style="text-align: right;">
+                <a class="arrow-link" href="/aac/student/{{ s.id }}" title="Open {{ s.name }}'s profile">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">UPCOMING CONSULTATIONS</span>
+          <h2>Advisor meetings</h2>
+        </div>
+      </div>
+      {% for meeting in meetings %}
+      <a class="meeting-item link-row" href="/aac/student/{{ meeting.student_id }}#meetings">
+        <span class="meeting-calendar">
+          <b>{{ meeting.date[8:10] }}</b>
+          <small>DAY</small>
+        </span>
+        <div>
+          <strong>{{ meeting.name }} · {{ meeting.topic }}</strong>
+          <span>{{ meeting.date|nice_date }}</span>
+        </div>
+        <span class="arrow-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
+      </a>
+      {% else %}
+      <p class="empty-state">No upcoming meetings scheduled.</p>
+      {% endfor %}
+    </section>
+  </div>
+
+  <!-- Right Column: Follow-up Queue & Advising Mission -->
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">ACTION REQUIRED</span>
+          <h2>Follow-up queue</h2>
+        </div>
+        <span class="count-bubble">{{ stat.followups }}</span>
+      </div>
+
+      {% for f in followups %}
+      <a class="followup-item link-row" href="/aac/student/{{ f.sid }}#followups">
+        <div class="followup-icon {{ f.priority|lower }}">
+          {% if f.priority == 'High' %}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          {% else %}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          {% endif %}
+        </div>
+        <div>
+          <strong>{{ f.name }}</strong>
+          <p>{{ f.title }}</p>
+          <span>Due {{ f.due_date|nice_date }}</span>
+        </div>
+        <span class="arrow-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
+      </a>
+      {% else %}
+      <div class="empty-state">No open follow-ups. All caught up!</div>
+      {% endfor %}
+    </section>
+
+    <div class="insight-card">
+      <span class="section-overline">A BETTER WAY TO SUPPORT</span>
+      <h2>Every student deserves a clear next step.</h2>
+      <p>Use personalized recovery plans, empathetic check-ins, and coordinated AAC support to build lasting academic resilience.</p>
+      <a href="/aac/plans">
+        <span>Explore Recovery Plans</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </a>
+    </div>
+  </div>
 </div>
 {% endblock %}

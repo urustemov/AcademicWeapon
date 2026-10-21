@@ -1,3 +1,47 @@
 {% extends 'base.html' %}
-{% block title %}My Meetings{% endblock %}{% block crumb %}My Meetings{% endblock %}
-{% block content %}<div class="page-heading"><div><div class="eyebrow dark">SUPPORT & CONNECTION</div><h1>My Meetings</h1><p>Your scheduled AAC consultations and previous check-ins.</p></div></div><section class="panel"><div class="panel-heading"><div><span class="section-overline">CONSULTATIONS</span><h2>Meeting schedule</h2></div></div>{% for meeting in meetings %}<div class="meeting-wide"><span class="meeting-calendar"><b>{{meeting.date[8:10]}}</b><small>DAY</small></span><div><strong>{{meeting.topic}}</strong><p>{{meeting.date|nice_date}} · {{meeting.advisor}}</p></div><span class="status {{'in-progress' if meeting.date>=today else 'completed'}}">{{'Scheduled' if meeting.date>=today else 'Previous'}}</span></div>{% else %}<div class="empty-state">No meetings are on the calendar yet.</div>{% endfor %}</section>{% endblock %}
+{% block title %}My Meetings{% endblock %}
+{% block crumb %}My Meetings{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">ADVISING CONSULTATIONS</div>
+    <h1>My Advising Consultations</h1>
+    <p>Your upcoming scheduled appointments with your Academic Advising Center advisor and records of previous meetings.</p>
+  </div>
+  <span class="outline-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    <span>{{ meetings|length }} Appointments</span>
+  </span>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">SCHEDULE &amp; ARCHIVE</span>
+      <h2>Advising calendar</h2>
+    </div>
+  </div>
+
+  {% for meeting in meetings %}
+  <div class="meeting-wide">
+    <span class="meeting-calendar">
+      <b>{{ meeting.date[8:10] }}</b>
+      <small>DAY</small>
+    </span>
+    <div>
+      <strong>{{ meeting.topic }}</strong>
+      <p>{{ meeting.date|nice_date }} · Advisor: {{ meeting.advisor }}{% if meeting.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ meeting.notes }}</span>{% endif %}</p>
+    </div>
+    <span class="status {{ 'active-plan' if meeting.date >= today else 'completed' }}">
+      {% if meeting.date >= today %}
+      Upcoming Appointment
+      {% else %}
+      Completed Session
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="empty-state">No advising appointments scheduled yet. Contact your AAC advisor to book a session.</div>
+  {% endfor %}
+</section>
+{% endblock %}

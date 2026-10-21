@@ -1,14 +1,172 @@
 {% extends 'base.html' %}
-{% block title %}Weekly Check-in{% endblock %}{% block crumb %}Weekly Check-in{% endblock %}
+{% block title %}Weekly Check-in{% endblock %}
+{% block crumb %}Weekly Check-in{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow dark">STAY CONNECTED</div><h1>Weekly Check-in</h1><p>Take two minutes to reflect. Your AAC advisor can use this to offer support.</p></div></div>
-<div class="two-columns wide-left"><div class="stack">
-<section class="panel"><div class="panel-heading"><div><span class="section-overline">YOUR REFLECTION</span><h2>How are things going?</h2></div><span class="muted small">2 min</span></div>
-{% if success %}<div class="alert success">✓ Your check-in has been submitted. Thank you for sharing.</div>{% endif %}
-<form action="/student/checkin" method="post" class="form-stack padded-form"><input type="hidden" name="_csrf" value="{{csrf}}"><div class="form-group"><label class="field-title">1. How was your academic week?</label><div class="radio-chips"><label><input type="radio" name="mood" value="Good" required><span>☺ Good</span></label><label><input type="radio" name="mood" value="Okay"><span>◡ Okay</span></label><label><input type="radio" name="mood" value="Difficult"><span>◕ Difficult</span></label></div></div>
-<div class="form-group"><label class="field-title" for="challenge">2. What was your biggest challenge?</label><textarea id="challenge" name="challenge" maxlength="300" rows="3" placeholder="For example, time management, assignments, motivation..."></textarea></div>
-<div class="form-group"><label class="field-title" for="priority">3. What is your priority for next week?</label><textarea id="priority" name="priority" maxlength="300" rows="3" placeholder="The one thing you'd like to work on..."></textarea></div>
-<div class="form-group"><label class="field-title">4. Would you like support from AAC?</label><div class="radio-chips"><label><input type="radio" name="needs_help" value="yes"><span>Yes, please</span></label><label><input type="radio" name="needs_help" value="no" checked><span>Not right now</span></label></div></div>
-<button class="primary-btn large" type="submit">Submit my check-in →</button></form></section></div>
-<div class="stack"><section class="panel warm"><span class="section-overline">WHY THIS MATTERS</span><h2>A small habit, a big difference.</h2><p>Weekly check-ins help you recognize what works, address challenges early, and communicate with your advisor.</p></section><section class="panel"><div class="panel-heading"><div><span class="section-overline">HISTORY</span><h2>Previous check-ins</h2></div></div>{% for item in recent %}<div class="history-item"><span class="mood-dot {{item.mood|lower}}"></span><div><strong>{{item.mood}} week</strong><span>{{item.created_at|nice_date}}</span><p>{{item.priority or 'No priority noted'}}</p></div></div>{% else %}<p class="muted small">No check-ins yet.</p>{% endfor %}</section></div></div>
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">TWO-MINUTE REFLECTION</div>
+    <h1>Weekly Academic Check-in</h1>
+    <p>A quick space to reflect on your week, highlight priorities, and request timely advising support whenever needed.</p>
+  </div>
+</div>
+
+<div class="two-columns wide-left">
+  <!-- Left Stack: Check-in Form -->
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">YOUR REFLECTION</span>
+          <h2>How are things going?</h2>
+        </div>
+        <span class="count-bubble">2 min</span>
+      </div>
+
+      {% if success %}
+      <div class="alert success">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <div>
+          Your weekly check-in has been submitted successfully! If you requested a follow-up, you can also
+          <a href="https://auca.kg/en/p6396607525/" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; font-weight: 700; color: inherit;">book an advising consultation here ↗</a>.
+        </div>
+      </div>
+      {% endif %}
+
+      <form action="/student/checkin" method="post" class="form-stack padded-form">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+        <!-- Question 1: Mood Selection -->
+        <div class="form-group">
+          <label class="field-title">1. How was your academic week overall?</label>
+          <div class="radio-chips">
+            <label>
+              <input type="radio" name="mood" value="Good" required>
+              <span>
+                <span style="font-size: 1.15rem; line-height: 1;">😊</span>
+                <strong>Good</strong>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="mood" value="Okay">
+              <span>
+                <span style="font-size: 1.15rem; line-height: 1;">😐</span>
+                <strong>Okay</strong>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="mood" value="Difficult">
+              <span>
+                <span style="font-size: 1.15rem; line-height: 1;">😔</span>
+                <strong>Difficult</strong>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Question 2: Biggest Challenge -->
+        <div class="form-group">
+          <label class="field-title" for="challenge">2. What was your biggest challenge this week?</label>
+          <textarea id="challenge" name="challenge" maxlength="300" rows="3" placeholder="For example: managing assignment deadlines, understanding lecture concepts, motivation..."></textarea>
+        </div>
+
+        <!-- Question 3: Next Priority -->
+        <div class="form-group">
+          <label class="field-title" for="priority">3. What is your single main priority for next week?</label>
+          <textarea id="priority" name="priority" maxlength="300" rows="3" placeholder="The one academic milestone or task you want to focus on..."></textarea>
+        </div>
+
+        <!-- Question 4: Request Support -->
+        <div class="form-group">
+          <label class="field-title">4. Would you like support or a follow-up from your AAC advisor?</label>
+          <div class="radio-chips">
+            <label>
+              <input type="radio" name="needs_help" value="yes" id="needsHelpYes">
+              <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                Yes, please reach out
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="needs_help" value="no" id="needsHelpNo" checked>
+              <span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Not right now, I'm okay
+              </span>
+            </label>
+          </div>
+
+          <!-- Direct Callout linking to AUCA Appointment booking -->
+          <div class="advisor-callout" id="advisorCallout" style="display: none;">
+            <div>
+              <p>Schedule your one-on-one session with your AAC advisor:</p>
+              <span class="small muted">AUCA Academic Advising Center Consultation Booking</span>
+            </div>
+            <a href="https://auca.kg/en/p6396607525/" target="_blank" rel="noopener noreferrer" class="primary-btn" style="padding: 0.5rem 0.95rem;">
+              <span>Book Appointment</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+            </a>
+          </div>
+        </div>
+
+        <button class="primary-btn large" type="submit" style="justify-content: center; gap: 0.75rem; margin-top: 0.5rem;">
+          <span>Submit Weekly Check-in</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </button>
+      </form>
+    </section>
+  </div>
+
+  <!-- Right Stack: Guidance & Past Check-ins -->
+  <div class="stack">
+    <section class="panel warm">
+      <span class="section-overline">ADVISING PHILOSOPHY</span>
+      <h2>A small habit, a big difference.</h2>
+      <p>Weekly check-ins help you spot academic roadblocks early, notice what study strategies work best, and keep communication clear with your advisor.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">REFLECTION HISTORY</span>
+          <h2>Previous check-ins</h2>
+        </div>
+      </div>
+
+      {% for item in recent %}
+      <div class="history-item">
+        <span class="mood-dot {{ item.mood|lower }}"></span>
+        <div>
+          <strong>{{ item.mood }} week</strong>
+          <span>{{ item.created_at|nice_date }}</span>
+          <p>{{ item.priority or 'No specific priority noted' }}</p>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted small" style="margin: 0.5rem 0;">No previous check-in submissions yet.</p>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+
+<!-- Modal Window for Advisor Follow-up (AUCA Booking Link) -->
+<div class="advisor-modal" id="advisorModal" role="dialog" aria-modal="true" aria-labelledby="advisorModalTitle">
+  <div class="advisor-modal-box">
+    <div class="advisor-modal-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    </div>
+    <h3 class="advisor-modal-title" id="advisorModalTitle">Schedule Advisor Follow-up</h3>
+    <p class="advisor-modal-desc">
+      You indicated that you would like a follow-up with your Academic Advising Center advisor. You can book an appointment directly using the AUCA advising portal:
+    </p>
+    <div class="advisor-modal-actions">
+      <a href="https://auca.kg/en/p6396607525/" target="_blank" rel="noopener noreferrer" class="primary-btn large" style="justify-content: center; text-decoration: none;">
+        <span>Open AUCA Advising Booking Page</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+      </a>
+      <button type="button" class="secondary-btn" id="closeAdvisorModal">
+        Continue Check-in Submission
+      </button>
+    </div>
+  </div>
+</div>
 {% endblock %}

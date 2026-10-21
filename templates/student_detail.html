@@ -1,24 +1,320 @@
 {% extends 'base.html' %}
-{% block title %}{{student.name}}{% endblock %}{% block crumb %}Student Management / Profile{% endblock %}
+{% block title %}{{ student.name }}{% endblock %}
+{% block crumb %}Student Management / Profile{% endblock %}
 {% block content %}
-<a href="/aac/students" class="back-link">← Back to students</a>
-<div class="profile-heading"><span class="profile-avatar">{{student.avatar}}</span><div class="profile-identity"><div class="eyebrow dark">{{student.student_code}} · YEAR {{student.year}}</div><h1>{{student.name}}</h1><span>{{student.program}}</span></div><span class="attention {{student.attention|lower|replace(' ','-')}}">{{student.attention}}</span></div>
-<div class="profile-info"><div><span>ACADEMIC GPA (DEMO)</span><strong>{{'%.2f'|format(student.gpa)}}</strong></div><div><span>CREDIT LOAD</span><strong>{{student.credit_load}} credits</strong></div><div><span>CASE MANAGER</span><strong>{{student.advisor}}</strong></div><div><span>CONTACT EMAIL</span><strong>{{student.email}}</strong></div></div>
-<div class="two-columns wide-left">
-<div class="stack">
-<section class="panel"><div class="panel-heading"><div><span class="section-overline">SUPPORT CASE</span><h2>Case status</h2></div><span class="status {{student.status|lower|replace(' ','-')}}">{{student.status}}</span></div><form method="post" action="/aac/student/{{student.id}}/status" class="inline-edit"><input type="hidden" name="_csrf" value="{{csrf}}"><select name="status" aria-label="Change support case status">{% for opt in ['Initial Assessment','Active Plan','On Track','Needs Review','Semester Review'] %}<option value="{{opt}}" {{'selected' if opt==student.status else ''}}>{{opt}}</option>{% endfor %}</select><button class="secondary-btn" type="submit">Save status</button></form><p class="small muted">This is a support case status, not an official probation decision.</p></section>
-<section class="panel" id="goals"><div class="panel-heading"><div><span class="section-overline">RECOVERY PLAN</span><h2>Academic goals</h2></div><span class="count-bubble">{{goals|length}}</span></div><div class="goal-cards">{% for goal in goals %}<div class="goal-card"><span class="goal-spark">✦</span><div><strong>{{goal.title}}</strong><span>{{goal.target}}</span></div><span class="tag-soft">{{goal.status}}</span></div>{% else %}<div class="empty-state">No goals yet</div>{% endfor %}</div><details class="add-section"><summary>＋ Add academic goal</summary><form method="post" action="/aac/student/{{student.id}}/goal" class="form-stack inset-form"><input type="hidden" name="_csrf" value="{{csrf}}"><label>Goal title<input name="title" maxlength="140" required placeholder="e.g. Improve course attendance"></label><label>Target<input name="target" maxlength="180" required placeholder="e.g. Attend 90% of classes"></label><button type="submit" class="primary-btn">Save goal →</button></form></details></section>
-<section class="panel" id="tasks"><div class="panel-heading"><div><span class="section-overline">RECOVERY PLAN</span><h2>Action items</h2></div><span class="count-bubble">{{tasks|length}}</span></div>
-<div class="table-scroll"><table class="data-table"><thead><tr><th>TASK</th><th>DUE</th><th>PRIORITY</th><th>STATUS</th></tr></thead><tbody>{% for t in tasks %}<tr><td><strong>{{t.title}}</strong><div class="table-subtext">{{t.details}}</div></td><td>{{t.due_date|nice_date}}</td><td><span class="priority {{t.priority|lower}}">{{t.priority}}</span></td><td><form method="post" action="/aac/task/{{t.id}}/status" class="select-form"><input type="hidden" name="_csrf" value="{{csrf}}"><select name="status" class="tiny-select" aria-label="Update task {{t.id}} status" onchange="this.form.requestSubmit()">{% for opt in ['To Do','In Progress','Completed'] %}<option value="{{opt}}" {{'selected' if opt==t.status else ''}}>{{opt}}</option>{% endfor %}</select><noscript><button type="submit">Update</button></noscript></form></td></tr>{% else %}<tr><td colspan="4">No tasks assigned</td></tr>{% endfor %}</tbody></table></div>
-<details class="add-section"><summary>＋ Assign new action item</summary><form method="post" action="/aac/student/{{student.id}}/task" class="form-stack inset-form"><input type="hidden" name="_csrf" value="{{csrf}}"><label>Task title<input name="title" maxlength="140" required placeholder="e.g. Complete Math problem set"></label><label>Details<input name="details" maxlength="350" placeholder="Optional instructions"></label><div class="form-row"><label>Due date<input type="date" name="due_date" value="{{today}}" required></label><label>Priority<select name="priority"><option>Low</option><option selected>Medium</option><option>High</option></select></label></div><button type="submit" class="primary-btn">Assign task →</button></form></details></section>
-<section class="panel" id="meetings"><div class="panel-heading"><div><span class="section-overline">CONNECTION</span><h2>Meeting records</h2></div><span class="count-bubble">{{meetings|length}}</span></div>{% for m in meetings %}<div class="meeting-wide"><span class="meeting-calendar"><b>{{m.date[8:10]}}</b><small>DAY</small></span><div><strong>{{m.topic}}</strong><p>{{m.date|nice_date}} · {{m.advisor}}{% if m.notes %}<br>{{m.notes}}{% endif %}</p></div></div>{% else %}<div class="empty-state">No meetings recorded</div>{% endfor %}
-<details class="add-section"><summary>＋ Schedule or record a meeting</summary><form method="post" action="/aac/student/{{student.id}}/meeting" class="form-stack inset-form"><input type="hidden" name="_csrf" value="{{csrf}}"><label>Meeting topic<input name="topic" required maxlength="140" placeholder="e.g. Semester progress review"></label><label>Date<input type="date" name="date" value="{{today}}" required></label><label>Notes (demo data only)<textarea name="notes" maxlength="400" rows="2" placeholder="Short summary"></textarea></label><button class="primary-btn" type="submit">Add meeting →</button></form></details></section>
+<a href="/aac/students" class="back-link">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+  <span>Back to Student Directory</span>
+</a>
+
+<!-- Student Profile Header Card -->
+<div class="profile-heading">
+  <span class="profile-avatar">{{ student.avatar }}</span>
+  <div class="profile-identity">
+    <div class="eyebrow dark">{{ student.student_code }} · YEAR {{ student.year }}</div>
+    <h1>{{ student.name }}</h1>
+    <span>{{ student.program }}</span>
+  </div>
+  <span class="attention {{ student.attention|lower|replace(' ', '-') }}">{{ student.attention }}</span>
 </div>
-<div class="stack">
-<section class="panel" id="followups"><div class="panel-heading"><div><span class="section-overline">ACTION REQUIRED</span><h2>Follow-ups</h2></div><span class="count-bubble">{{followups|length}}</span></div>
-{% for f in followups %}<div class="side-followup"><span class="followup-icon {{f.priority|lower}}">{{'!' if f.priority=='High' else '↻'}}</span><div><strong>{{f.title}}</strong><span>Due {{f.due_date|nice_date}}</span>{% if f.status=='Open' %}<form action="/aac/followup/{{f.id}}/resolve" method="post"><input type="hidden" name="_csrf" value="{{csrf}}"><button type="submit" class="mini-btn">Mark resolved ✓</button></form>{% else %}<span class="status completed">Resolved</span>{% endif %}</div></div>{% else %}<p class="muted small">Nothing awaiting follow-up.</p>{% endfor %}
-<details class="add-section"><summary>＋ Add follow-up</summary><form method="post" action="/aac/student/{{student.id}}/followup" class="form-stack inset-form"><input type="hidden" name="_csrf" value="{{csrf}}"><label>Follow-up title<input name="title" required maxlength="150" placeholder="e.g. Contact student about attendance"></label><label>Due date<input type="date" name="due_date" value="{{today}}" required></label><label>Priority<select name="priority"><option>Normal</option><option>High</option></select></label><button class="primary-btn" type="submit">Add follow-up →</button></form></details></section>
-<section class="panel"><div class="panel-heading"><div><span class="section-overline">STUDENT VOICE</span><h2>Weekly check-ins</h2></div></div>{% for c in checkins %}<div class="history-item"><span class="mood-dot {{c.mood|lower}}"></span><div><strong>{{c.mood}} week</strong><span>{{c.created_at|nice_date}}{% if c.needs_help %} · <b class="alert-text">Support requested</b>{% endif %}</span><p>{{c.challenge or 'No challenges noted'}}</p><p><b>Next priority:</b> {{c.priority or 'Not provided'}}</p></div></div>{% else %}<p class="muted small">Student has not submitted a check-in.</p>{% endfor %}</section>
-<div class="tip-card"><div class="tip-icon">✧</div><strong>Support, not surveillance.</strong><p>Discuss next steps with the student. A status on this dashboard is not an official university academic decision.</p></div>
-</div></div>
+
+<!-- Student Core Academic Snapshot -->
+<div class="profile-info">
+  <div>
+    <span>Academic GPA (Demo)</span>
+    <strong style="font-variant-numeric: tabular-nums;">{{ '%.2f'|format(student.gpa) }}</strong>
+  </div>
+  <div>
+    <span>Credit Load</span>
+    <strong>{{ student.credit_load }} credits</strong>
+  </div>
+  <div>
+    <span>Assigned Advisor</span>
+    <strong>{{ student.advisor }}</strong>
+  </div>
+  <div>
+    <span>Student Email</span>
+    <strong>{{ student.email }}</strong>
+  </div>
+</div>
+
+<div class="two-columns wide-left">
+  <!-- Left Stack: Case Status, Goals, Tasks, Meetings -->
+  <div class="stack">
+    <!-- Support Case Status Selector -->
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">ADVISING STATUS</span>
+          <h2>Case status</h2>
+        </div>
+        <span class="status {{ student.status|lower|replace(' ', '-') }}">{{ student.status }}</span>
+      </div>
+
+      <form method="post" action="/aac/student/{{ student.id }}/status" class="inline-edit">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <select name="status" aria-label="Change support case status">
+          {% for opt in ['Initial Assessment','Active Plan','On Track','Needs Review','Semester Review'] %}
+          <option value="{{ opt }}" {{ 'selected' if opt == student.status else '' }}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+        <button class="secondary-btn" type="submit">Update status</button>
+      </form>
+      <p class="small muted" style="margin-top: 0.5rem; margin-bottom: 0;">Advising case status is for internal AAC coordination and does not constitute an official university sanction.</p>
+    </section>
+
+    <!-- Academic Goals -->
+    <section class="panel" id="goals">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">RECOVERY PLAN</span>
+          <h2>Academic goals</h2>
+        </div>
+        <span class="count-bubble">{{ goals|length }}</span>
+      </div>
+
+      <div class="goal-cards">
+        {% for goal in goals %}
+        <div class="goal-card">
+          <span class="goal-spark">✦</span>
+          <div>
+            <strong>{{ goal.title }}</strong>
+            <span>{{ goal.target }}</span>
+          </div>
+          <span class="tag-soft">{{ goal.status }}</span>
+        </div>
+        {% else %}
+        <div class="empty-state">No academic goals recorded yet.</div>
+        {% endfor %}
+      </div>
+
+      <details class="add-section">
+        <summary>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Add Academic Goal</span>
+        </summary>
+        <form method="post" action="/aac/student/{{ student.id }}/goal" class="form-stack inset-form">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <label>
+            Goal Title
+            <input name="title" maxlength="140" required placeholder="e.g. Strengthen semester GPA">
+          </label>
+          <label>
+            Target Metric / Behavior
+            <input name="target" maxlength="180" required placeholder="e.g. Reach GPA of 2.50 or attend 90% of seminars">
+          </label>
+          <button type="submit" class="primary-btn">Save Goal</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- Student Tasks (Read-only for AAC) -->
+    <section class="panel" id="tasks">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">STUDENT TASKS</span>
+          <h2>My Tasks</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+          <span class="count-bubble">{{ tasks|length }}</span>
+          <span class="readonly-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            View only
+          </span>
+        </div>
+      </div>
+
+      <p class="advisor-note">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+        Tasks are created and managed by the student. Advisors can view progress but cannot modify tasks.
+      </p>
+
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Due Date</th>
+              <th>Priority</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tasks %}
+            <tr class="{{ 'task-row-done' if t.status == 'Completed' else '' }}">
+              <td>
+                <strong class="{{ 'done-text' if t.status == 'Completed' else '' }}">{{ t.title }}</strong>
+                {% if t.details %}
+                <div class="table-subtext">{{ t.details }}</div>
+                {% endif %}
+              </td>
+              <td style="white-space:nowrap;">{{ t.due_date|nice_date }}</td>
+              <td><span class="priority {{ t.priority|lower }}">{{ t.priority }}</span></td>
+              <td><span class="status {{ t.status|lower|replace(' ','-') }}">{{ t.status }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4">
+                <div class="empty-state">Student has not added any tasks yet.</div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Meeting Records -->
+    <section class="panel" id="meetings">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">ADVISOR CONSULTATIONS</span>
+          <h2>Meeting records</h2>
+        </div>
+        <span class="count-bubble">{{ meetings|length }}</span>
+      </div>
+
+      {% for m in meetings %}
+      <div class="meeting-wide">
+        <span class="meeting-calendar">
+          <b>{{ m.date[8:10] }}</b>
+          <small>DAY</small>
+        </span>
+        <div>
+          <strong>{{ m.topic }}</strong>
+          <p>{{ m.date|nice_date }} · Advisor: {{ m.advisor }}{% if m.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ m.notes }}</span>{% endif %}</p>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state">No advising meetings recorded yet.</div>
+      {% endfor %}
+
+      <details class="add-section">
+        <summary>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Schedule or Record a Meeting</span>
+        </summary>
+        <form method="post" action="/aac/student/{{ student.id }}/meeting" class="form-stack inset-form">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <label>
+            Meeting Topic
+            <input name="topic" required maxlength="140" placeholder="e.g. Midterm recovery review">
+          </label>
+          <label>
+            Consultation Date
+            <input type="date" name="date" value="{{ today }}" required>
+          </label>
+          <label>
+            Advisor Notes (Demo only)
+            <textarea name="notes" maxlength="400" rows="2" placeholder="Summary of discussion and student commitments"></textarea>
+          </label>
+          <button class="primary-btn" type="submit">Save Meeting Record</button>
+        </form>
+      </details>
+    </section>
+  </div>
+
+  <!-- Right Stack: Follow-ups, Check-ins, Guidance -->
+  <div class="stack">
+    <!-- Follow-up Queue -->
+    <section class="panel" id="followups">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">ACTION REQUIRED</span>
+          <h2>Follow-up tasks</h2>
+        </div>
+        <span class="count-bubble">{{ followups|length }}</span>
+      </div>
+
+      {% for f in followups %}
+      <div class="side-followup">
+        <span class="followup-icon {{ f.priority|lower }}">
+          {% if f.priority == 'High' %}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          {% else %}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          {% endif %}
+        </span>
+        <div>
+          <strong>{{ f.title }}</strong>
+          <span>Due {{ f.due_date|nice_date }}</span>
+          {% if f.status == 'Open' %}
+          <form action="/aac/followup/{{ f.id }}/resolve" method="post" style="margin-top: 0.25rem;">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <button type="submit" class="mini-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Mark Resolved</span>
+            </button>
+          </form>
+          {% else %}
+          <span class="status completed" style="margin-top: 0.25rem;">Resolved</span>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="muted small" style="margin: 0.5rem 0;">No active follow-ups for this student.</p>
+      {% endfor %}
+
+      <details class="add-section">
+        <summary>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Add Follow-up Reminder</span>
+        </summary>
+        <form method="post" action="/aac/student/{{ student.id }}/followup" class="form-stack inset-form">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <label>
+            Follow-up Title
+            <input name="title" required maxlength="150" placeholder="e.g. Check attendance after 2 weeks">
+          </label>
+          <label>
+            Due Date
+            <input type="date" name="due_date" value="{{ today }}" required>
+          </label>
+          <label>
+            Priority
+            <select name="priority">
+              <option>Normal</option>
+              <option>High</option>
+            </select>
+          </label>
+          <button class="primary-btn" type="submit">Create Follow-up</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- Student Check-in Reflections -->
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <span class="section-overline">STUDENT VOICE</span>
+          <h2>Weekly check-ins</h2>
+        </div>
+        <span class="count-bubble">{{ checkins|length }}</span>
+      </div>
+
+      {% for c in checkins %}
+      <div class="history-item">
+        <span class="mood-dot {{ c.mood|lower }}"></span>
+        <div>
+          <strong>{{ c.mood }} week</strong>
+          <span>{{ c.created_at|nice_date }}{% if c.needs_help %} · <b class="alert-text">Support Requested</b>{% endif %}</span>
+          <p><strong>Challenge:</strong> {{ c.challenge or 'None noted' }}</p>
+          <p><strong>Upcoming Priority:</strong> {{ c.priority or 'Not specified' }}</p>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted small" style="margin: 0.5rem 0;">Student has not submitted a weekly check-in yet.</p>
+      {% endfor %}
+    </section>
+
+    <!-- Advising Philosophy Card -->
+    <div class="tip-card">
+      <div class="tip-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+      </div>
+      <strong>Support, not surveillance.</strong>
+      <p>Discuss realistic next steps collaboratively with the student. All items on this dashboard represent personalized academic coaching milestones.</p>
+    </div>
+  </div>
+</div>
 {% endblock %}

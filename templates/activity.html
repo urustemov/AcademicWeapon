@@ -1,3 +1,40 @@
 {% extends 'base.html' %}
-{% block title %}Activity Log{% endblock %}{% block crumb %}Activity Log{% endblock %}
-{% block content %}<div class="page-heading"><div><div class="eyebrow dark">TRANSPARENT CASE MANAGEMENT</div><h1>Recent Activity</h1><p>A local record of demo actions performed through Academic Weapon.</p></div></div><section class="panel"><div class="panel-heading"><div><span class="section-overline">CHANGES</span><h2>Activity history</h2></div><span class="muted small">Latest 50 events</span></div>{% for log in logs %}<div class="activity-item"><span class="activity-mark">↻</span><div><strong>{{log.event}}</strong><span>{{log.created_at|nice_date}} · Demo user #{{log.user_id}}</span></div></div>{% else %}<p class="empty-state">There are no events yet. Try editing a recovery plan or completing a check-in.</p>{% endfor %}</section>{% endblock %}
+{% block title %}Activity Log{% endblock %}
+{% block crumb %}Activity Log{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">AUDIT TRAIL &amp; COMPLIANCE</div>
+    <h1>Recent Advising Activity</h1>
+    <p>A chronological record of case updates, goal revisions, and check-in submissions across the AAC workspace.</p>
+  </div>
+  <span class="outline-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+    <span>Latest {{ logs|length }} Events</span>
+  </span>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">LOCAL AUDIT RECORD</span>
+      <h2>System activity history</h2>
+    </div>
+    <span class="muted small">Chronological demo log</span>
+  </div>
+
+  {% for log in logs %}
+  <div class="activity-item">
+    <div class="activity-mark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+    </div>
+    <div>
+      <strong>{{ log.event }}</strong>
+      <span>{{ log.created_at|nice_date }} · Initiated by Demo User #{{ log.user_id }}</span>
+    </div>
+  </div>
+  {% else %}
+  <p class="empty-state">No recorded activity events yet. Actions such as updating a task status or filing a check-in will appear here.</p>
+  {% endfor %}
+</section>
+{% endblock %}

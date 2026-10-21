@@ -1,3 +1,35 @@
 {% extends 'base.html' %}
-{% block title %}Recovery Plans{% endblock %}{% block crumb %}Recovery Plans{% endblock %}
-{% block content %}<div class="page-heading"><div><div class="eyebrow dark">INDIVIDUALIZED SUPPORT</div><h1>Academic Recovery Plans</h1><p>Every student deserves clear academic goals and achievable next steps.</p></div></div><div class="plan-index-grid">{% for s in students %}<a href="/aac/student/{{s.id}}#goals" class="index-card"><div class="index-top"><span class="person-avatar">{{s.avatar}}</span><span class="arrow-link">↗</span></div><h2>{{s.name}}</h2><p>{{s.program}} · Year {{s.year}}</p><div class="index-footer"><span>{{s.goals_count}} goals</span><span class="status {{s.status|lower|replace(' ','-')}}">{{s.status}}</span></div></a>{% endfor %}</div>{% endblock %}
+{% block title %}Recovery Plans{% endblock %}
+{% block crumb %}Recovery Plans{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">INDIVIDUALIZED ADVISING ROADMAPS</div>
+    <h1>Academic Recovery Plans</h1>
+    <p>Every student receives a personalized set of targets and milestones designed to build long-term academic confidence.</p>
+  </div>
+  <span class="outline-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+    <span>{{ students|length }} Active Cohorts</span>
+  </span>
+</div>
+
+<div class="plan-index-grid">
+  {% for s in students %}
+  <a href="/aac/student/{{ s.id }}#goals" class="index-card">
+    <div class="index-top">
+      <span class="person-avatar">{{ s.avatar }}</span>
+      <span class="arrow-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+      </span>
+    </div>
+    <h2>{{ s.name }}</h2>
+    <p>{{ s.program }} · Year {{ s.year }}</p>
+    <div class="index-footer">
+      <span>{{ s.goals_count }} Academic Goals</span>
+      <span class="status {{ s.status|lower|replace(' ', '-') }}">{{ s.status }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

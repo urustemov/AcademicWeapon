@@ -73,6 +73,7 @@ def seed_database():
           id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL,
           title TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', due_date TEXT NOT NULL,
           priority TEXT NOT NULL DEFAULT 'Medium', status TEXT NOT NULL DEFAULT 'To Do',
+          source TEXT NOT NULL DEFAULT 'aac',
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(student_id) REFERENCES students(id)
         );
@@ -93,13 +94,35 @@ def seed_database():
           status TEXT NOT NULL DEFAULT 'Open',
           FOREIGN KEY(student_id) REFERENCES students(id)
         );
+        CREATE TABLE IF NOT EXISTS deadlines (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL,
+          course TEXT NOT NULL, topic TEXT NOT NULL,
+          due_date TEXT NOT NULL, due_time TEXT NOT NULL DEFAULT '23:59',
+          weight INTEGER NOT NULL DEFAULT 10,
+          status TEXT NOT NULL DEFAULT 'Pending',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(student_id) REFERENCES students(id)
+        );
         CREATE TABLE IF NOT EXISTS audit_logs (
           id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
           event TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         ''')
         count = con.execute('SELECT COUNT(*) FROM students').fetchone()[0]
+        td = date.today()
+        tdstr = lambda days: (td+timedelta(days=days)).isoformat()
         if count:
+            try:
+                d_count = con.execute('SELECT COUNT(*) FROM deadlines').fetchone()[0]
+                if not d_count and con.execute('SELECT COUNT(*) FROM students WHERE id=1').fetchone()[0]:
+                    sample_deadlines = [
+                        (1, 'Psychology 101', 'Reflection paper', tdstr(4), '23:59', 15, 'Pending'),
+                        (1, 'Calculus I', 'Problem Set 4 & Quiz', tdstr(2), '17:00', 10, 'Pending'),
+                        (1, 'Academic Writing', 'Midterm Research Essay', tdstr(9), '23:59', 20, 'Pending'),
+                    ]
+                    con.executemany('INSERT INTO deadlines(student_id,course,topic,due_date,due_time,weight,status) VALUES (?,?,?,?,?,?,?)', sample_deadlines)
+            except (sqlite3.OperationalError, sqlite3.IntegrityError):
+                pass
             return
         names = [
             ('DEMO-1001', 'Alex Morgan', 'alex.morgan@example.com', 'Liberal Arts and Sciences', 2, 1.82, 24, 'AAC Advising Team', 'Active Plan', 'Follow-up Needed', 'AM'),
@@ -129,19 +152,17 @@ def seed_database():
         td = date.today()
         tdstr = lambda days: (td+timedelta(days=days)).isoformat()
         tasks = [
-            (1, 'Meet with your academic advisor', 'Review semester recovery goals.', tdstr(2), 'High', 'To Do'),
-            (1, 'Complete Mathematics problem set', 'Exercises from current study unit.', tdstr(3), 'High', 'In Progress'),
-            (1, 'Plan next week of studying', 'Set aside a 20-minute planning session.', tdstr(5), 'Medium', 'To Do'),
-            (1, 'Review lecture notes', 'Summarize this week’s key concepts.', tdstr(-1), 'Low', 'Completed'),
-            (1, 'Attend a tutoring session', 'Bring two questions to the session.', tdstr(-2), 'Medium', 'Completed'),
-            (2, 'Submit psychology reflection', 'Reflection draft and final checks.', tdstr(4), 'Medium', 'In Progress'),
-            (2, 'AAC check-in', 'Discuss academic progress.', tdstr(7), 'Medium', 'To Do'),
-            (3, 'Schedule urgent advisor check-in', 'Review recent academic difficulties.', tdstr(1), 'High', 'To Do'),
-            (4, 'Prepare a weekly timetable', 'Review your workload.', tdstr(6), 'Low', 'To Do'),
-            (5, 'Complete initial self-assessment', 'Share any learning challenges.', tdstr(2), 'Medium', 'To Do'),
-            (6, 'Attend writing support', 'Review research paper outline.', tdstr(6), 'Medium', 'Completed')
+            (1, 'Review lecture notes', 'Summarize this week’s key concepts.', tdstr(-1), 'Low', 'Completed', 'student'),
+            (1, 'Attend a tutoring session', 'Bring two questions to the session.', tdstr(-2), 'Medium', 'Completed', 'student'),
+            (1, 'Complete Mathematics problem set', 'Exercises from current study unit.', tdstr(3), 'High', 'In Progress', 'student'),
+            (1, 'Plan next week of studying', 'Set aside a 20-minute planning session.', tdstr(5), 'Medium', 'To Do', 'student'),
+            (2, 'Submit psychology reflection', 'Reflection draft and final checks.', tdstr(4), 'Medium', 'In Progress', 'student'),
+            (3, 'Schedule advisor check-in', 'Review recent academic difficulties.', tdstr(1), 'High', 'To Do', 'student'),
+            (4, 'Prepare a weekly timetable', 'Review your workload.', tdstr(6), 'Low', 'To Do', 'student'),
+            (5, 'Complete self-assessment', 'Share any learning challenges.', tdstr(2), 'Medium', 'To Do', 'student'),
+            (6, 'Attend writing support session', 'Review research paper outline.', tdstr(6), 'Medium', 'Completed', 'student'),
         ]
-        con.executemany('INSERT INTO tasks(student_id,title,details,due_date,priority,status) VALUES (?,?,?,?,?,?)', tasks)
+        con.executemany('INSERT INTO tasks(student_id,title,details,due_date,priority,status,source) VALUES (?,?,?,?,?,?,?)', tasks)
         meetings = [
             (1, tdstr(2), 'Recovery plan check-in', 'AAC Demo Advisor', 'Confirm next action steps'),
             (1, tdstr(-8), 'Initial consultation', 'AAC Demo Advisor', 'Discussed goals and study habits'),
@@ -160,3 +181,9 @@ def seed_database():
         con.executemany('INSERT INTO followups(student_id,title,due_date,priority,status) VALUES (?,?,?,?,?)', followups)
         con.execute('INSERT INTO checkins(student_id,mood,challenge,priority,needs_help) VALUES (?,?,?,?,?)',
                     (1,'Okay','Time management','Finish the mathematics practice set',0))
+        sample_deadlines = [
+            (1, 'Psychology 101', 'Reflection paper', tdstr(4), '23:59', 15, 'Pending'),
+            (1, 'Calculus I', 'Problem Set 4 & Quiz', tdstr(2), '17:00', 10, 'Pending'),
+            (1, 'Academic Writing', 'Midterm Research Essay', tdstr(9), '23:59', 20, 'Pending'),
+        ]
+        con.executemany('INSERT INTO deadlines(student_id,course,topic,due_date,due_time,weight,status) VALUES (?,?,?,?,?,?,?)', sample_deadlines)

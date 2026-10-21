@@ -1,55 +1,169 @@
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}Academic Weapon{% endblock %} · AUCA Academic Advising Center</title>
   <link rel="stylesheet" href="/static/style.css">
-  <script>try{document.documentElement.dataset.theme=localStorage.getItem('apss_theme')||'light'}catch(e){}</script>
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('apss_theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
 {% if user %}
 <div class="shell">
+  <!-- Desktop & Mobile Sidebar -->
   <aside class="sidebar" id="sidebar">
-    <a class="brand" href="/" aria-label="Academic Weapon home">
+    <a class="brand" href="/" aria-label="Academic Weapon Home">
       <span class="brand-symbol">A<span>.</span></span>
-      <span class="brand-copy"><strong>Academic Weapon</strong><small>ACADEMIC ADVISING CENTER</small></span>
+      <span class="brand-copy">
+        <strong>Academic Weapon</strong>
+        <small>Academic Advising Center</small>
+      </span>
     </a>
+
     <div class="sidebar-divider"></div>
-    <div class="workspace-identity"><span class="workspace-avatar">{{ user.display_name|initials }}</span><span class="workspace-lines"><strong>{{ user.display_name }}</strong><small>{{ 'AAC Staff Workspace' if user.role=='aac' else 'Student Workspace' }}</small></span><span class="workspace-dot"></span></div>
+
+    <div class="workspace-identity">
+      <span class="workspace-avatar">{{ user.display_name|initials }}</span>
+      <span class="workspace-lines">
+        <strong>{{ user.display_name }}</strong>
+        <small>{{ 'AAC Staff Workspace' if user.role=='aac' else 'Student Workspace' }}</small>
+      </span>
+      <span class="workspace-dot" title="Workspace Active"></span>
+    </div>
+
     <div class="nav-caption">WORKSPACE</div>
-    <nav class="main-nav" aria-label="Main navigation">
+    <nav class="main-nav" aria-label="Main Navigation">
     {% if user.role=='aac' %}
-      <a href="/aac" class="nav-link {{ 'active' if active=='aac_home' else '' }}"><span class="nav-icon">▦</span> Overview</a>
-      <a href="/aac/students" class="nav-link {{ 'active' if active=='aac_students' else '' }}"><span class="nav-icon">♙</span> Student Management</a>
-      <a href="/aac/plans" class="nav-link {{ 'active' if active=='aac_plans' else '' }}"><span class="nav-icon">☷</span> Recovery Plans</a>
-      <a href="/aac/activity" class="nav-link {{ 'active' if active=='aac_activity' else '' }}"><span class="nav-icon">◴</span> Activity Log</a>
+      <a href="/aac" class="nav-link {{ 'active' if active=='aac_home' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        </span>
+        Overview
+      </a>
+      <a href="/aac/students" class="nav-link {{ 'active' if active=='aac_students' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </span>
+        Student Management
+      </a>
+      <a href="/aac/plans" class="nav-link {{ 'active' if active=='aac_plans' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        </span>
+        Recovery Plans
+      </a>
+      <a href="/aac/activity" class="nav-link {{ 'active' if active=='aac_activity' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </span>
+        Activity Log
+      </a>
     {% else %}
-      <a href="/student" class="nav-link {{ 'active' if active=='student_home' else '' }}"><span class="nav-icon">▦</span> My Dashboard</a>
-      <a href="/student/plan" class="nav-link {{ 'active' if active=='student_plan' else '' }}"><span class="nav-icon">☷</span> Recovery Plan</a>
-      <a href="/student/checkin" class="nav-link {{ 'active' if active=='student_checkin' else '' }}"><span class="nav-icon">✎</span> Weekly Check-in</a>
-      <a href="/student/meetings" class="nav-link {{ 'active' if active=='student_meetings' else '' }}"><span class="nav-icon">▣</span> My Meetings</a>
+      <a href="/student" class="nav-link {{ 'active' if active=='student_home' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        </span>
+        My Dashboard
+      </a>
+      <a href="/student/plan" class="nav-link {{ 'active' if active=='student_plan' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+        </span>
+        Academic Weapon Plan
+      </a>
+      <a href="/student/deadlines" class="nav-link {{ 'active' if active=='student_deadlines' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline><path d="M16 2v4"></path><path d="M8 2v4"></path></svg>
+        </span>
+        Deadlines
+      </a>
+      <a href="/student/checkin" class="nav-link {{ 'active' if active=='student_checkin' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </span>
+        Weekly Check-in
+      </a>
+      <a href="/student/meetings" class="nav-link {{ 'active' if active=='student_meetings' else '' }}">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        </span>
+        My Meetings
+      </a>
     {% endif %}
     </nav>
+
     <div class="sidebar-bottom">
-      <div class="support-note"><span class="support-emoji">✦</span><strong>Your academic journey matters.</strong><span>Small steps, steady progress.</span></div>
-      <form action="/logout" method="post"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="nav-link logout" type="submit"><span class="nav-icon">⇥</span> Sign out</button></form>
-      <div class="sidebar-footer">AUCA · Academic Weapon prototype v0.1</div>
+      <div class="support-note">
+        <span class="support-emoji">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          Advising Care
+        </span>
+        <strong>Your academic journey matters.</strong>
+        <span>Small steps, consistent support, steady progress forward.</span>
+      </div>
+
+      <form action="/logout" method="post">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <button class="nav-link logout" type="submit">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </span>
+          Sign out
+        </button>
+      </form>
+
+      <div class="sidebar-footer">AUCA · Academic Weapon v0.2</div>
     </div>
   </aside>
+
+  <!-- Mobile screen backdrop -->
   <div class="mobile-screen" id="mobileScreen"></div>
+
+  <!-- Main Canvas Area -->
   <main class="main-area">
     <header class="topbar">
-      <div class="topbar-left"><button class="mobile-menu" id="menuBtn" type="button" aria-label="Open navigation">☰</button><span class="breadcrumb">Academic Weapon <span class="crumb-sep">/</span> {% block crumb %}Workspace{% endblock %}</span></div>
-      <div class="topbar-right"><span class="demo-chip"><span class="live-dot"></span> DEMO · SYNTHETIC DATA</span><button class="icon-btn" id="themeToggle" title="Toggle light and dark theme" aria-label="Toggle theme" type="button">◐</button><span class="top-avatar">{{ user.display_name|initials }}</span></div>
+      <div class="topbar-left">
+        <button class="mobile-menu" id="menuBtn" type="button" aria-label="Toggle navigation">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <span class="breadcrumb">
+          Academic Weapon <span class="crumb-sep">/</span> {% block crumb %}Workspace{% endblock %}
+        </span>
+      </div>
+
+      <div class="topbar-right">
+        <span class="demo-chip">
+          <span class="live-dot"></span> DEMO · SYNTHETIC DATA
+        </span>
+
+        <button class="icon-btn" id="themeToggle" title="Toggle light and dark theme" aria-label="Toggle theme" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+
+        <span class="top-avatar" title="{{ user.display_name }}">{{ user.display_name|initials }}</span>
+      </div>
     </header>
+
     <div class="content-area">
       {% block content %}{% endblock %}
-      <footer class="app-footer">Academic Weapon <span>·</span> Local demonstration, not connected to AUCA student records</footer>
+      <footer class="app-footer">
+        Academic Weapon <span>·</span> AUCA Academic Advising Center <span>·</span> Local demonstration environment (Synthetic records only)
+      </footer>
     </div>
   </main>
 </div>
-{% else %}{% block auth %}{% endblock %}{% endif %}
+{% else %}
+{% block auth %}{% endblock %}
+{% endif %}
 <script src="/static/app.js" defer></script>
 </body>
 </html>

@@ -1,11 +1,293 @@
 {% extends 'base.html' %}
-{% block title %}Academic Recovery Plan{% endblock %}{% block crumb %}My Recovery Plan{% endblock %}
+{% block title %}Academic Weapon Plan{% endblock %}
+{% block crumb %}My Academic Weapon Plan{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow dark">YOUR PATH TO PROGRESS</div><h1>Academic Recovery Plan</h1><p>A clear overview of your goals and the steps to reach them.</p></div><span class="outline-label">☷ &nbsp; Individual Action Plan</span></div>
-<div class="feature-banner"><div><span class="eyebrow">YOUR CURRENT PROGRESS</span><div class="feature-stat">{{pct}}% <span>of plan tasks completed</span></div><p>Keep building momentum — one task at a time.</p></div><div class="feature-track"><div class="feature-track-fill" style="width:{{pct}}%"></div></div></div>
-<section class="panel section-margin" id="goals"><div class="panel-heading"><div><span class="section-overline">THE BIG PICTURE</span><h2>My academic goals</h2></div><span class="muted small">{{goals|length}} goals</span></div><div class="goal-grid">{% for goal in goals %}<div class="goal-tile"><span class="tile-icon">◎</span><strong>{{goal.title}}</strong><p>{{goal.target}}</p><span class="tag-soft">{{goal.status}}</span></div>{% endfor %}</div></section>
-<section class="panel section-margin" id="tasks"><div class="panel-heading"><div><span class="section-overline">NEXT STEPS</span><h2>My action items</h2></div><span class="muted small">{{completed}} of {{tasks|length}} completed</span></div>
- <div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>Due date</th><th>Priority</th><th>Status</th><th>Update</th></tr></thead><tbody>
- {% for task in tasks %}<tr><td><strong>{{task.title}}</strong><div class="table-subtext">{{task.details}}</div></td><td>{{task.due_date|nice_date}}</td><td><span class="priority {{task.priority|lower}}">{{task.priority}}</span></td><td><span class="status {{task.status|lower|replace(' ','-')}}">{{task.status}}</span></td><td><form action="/student/task/{{task.id}}/status" method="post"><input type="hidden" name="_csrf" value="{{csrf}}"><button class="mini-btn" type="submit">{{'↶ Reopen' if task.status=='Completed' else '✓ Complete'}}</button></form></td></tr>{% else %}<tr><td colspan="5">No assigned tasks</td></tr>{% endfor %}
- </tbody></table></div></section>
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">YOUR ACADEMIC WEAPON ROADMAP</div>
+    <h1>Academic Weapon Plan</h1>
+    <p>A structured, milestone-driven framework developed with your AAC advisor to unlock your academic potential and momentum.</p>
+  </div>
+  <span class="outline-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+    <span>Individualized Action Plan</span>
+  </span>
+</div>
+
+<!-- Hero Progress Banner -->
+<div class="feature-banner">
+  <div>
+    <span class="eyebrow">YOUR SEMESTER MILESTONE PROGRESS</span>
+    <div class="feature-stat">
+      {{ pct }}% <span>of planned action items completed</span>
+    </div>
+    <p>Consistency builds achievement. Check off tasks as you complete them to keep your advisor updated.</p>
+  </div>
+  <div class="feature-track">
+    <div class="feature-track-fill" style="width:{{ pct }}%"></div>
+  </div>
+</div>
+
+<!-- Academic Goals Grid -->
+<section class="panel section-margin" id="goals">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">THE BIG PICTURE</span>
+      <h2>My academic goals</h2>
+    </div>
+    <span class="count-bubble">{{ goals|length }} Goals</span>
+  </div>
+
+  <div class="goal-grid">
+    {% for goal in goals %}
+    <div class="goal-tile">
+      <div class="tile-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+      </div>
+      <strong>{{ goal.title }}</strong>
+      <p>{{ goal.target }}</p>
+      <span class="tag-soft">{{ goal.status }}</span>
+    </div>
+    {% else %}
+    <div class="empty-state">No academic goals recorded yet.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- Action Items Table -->
+<section class="panel section-margin" id="tasks">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">MY TASKS</span>
+      <h2>My Tasks</h2>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <span class="count-bubble">{{ completed }} of {{ tasks|length }} completed</span>
+      <button class="btn-primary btn-sm" onclick="openAddTaskModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add Task
+      </button>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Action Item</th>
+          <th>Due Date</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr class="{{ 'task-row-done' if task.status == 'Completed' else '' }}">
+          <td>
+            <div>
+              <strong class="{{ 'done-text' if task.status == 'Completed' else '' }}">{{ task.title }}</strong>
+              {% if task.details %}
+              <div class="table-subtext">{{ task.details }}</div>
+              {% endif %}
+            </div>
+          </td>
+          <td style="white-space:nowrap;">{{ task.due_date|nice_date }}</td>
+
+          <!-- Inline priority selector -->
+          <td>
+            <form action="/student/task/{{ task.id }}/update_fields" method="post" class="inline-field-form">
+              <input type="hidden" name="_csrf" value="{{ csrf }}">
+              <input type="hidden" name="status" value="{{ task.status }}">
+              <select name="priority" class="inline-select priority-select {{ task.priority|lower }}" onchange="this.form.submit()" title="Change priority">
+                <option value="Low" {{ 'selected' if task.priority=='Low' }}>Low</option>
+                <option value="Medium" {{ 'selected' if task.priority=='Medium' }}>Medium</option>
+                <option value="High" {{ 'selected' if task.priority=='High' }}>High</option>
+              </select>
+            </form>
+          </td>
+
+          <!-- Inline status selector -->
+          <td>
+            <form action="/student/task/{{ task.id }}/update_fields" method="post" class="inline-field-form">
+              <input type="hidden" name="_csrf" value="{{ csrf }}">
+              <input type="hidden" name="priority" value="{{ task.priority }}">
+              <select name="status" class="inline-select status-select {{ task.status|lower|replace(' ','-') }}" onchange="this.form.submit()" title="Change status">
+                <option value="To Do" {{ 'selected' if task.status=='To Do' }}>To Do</option>
+                <option value="In Progress" {{ 'selected' if task.status=='In Progress' }}>In Progress</option>
+                <option value="Completed" {{ 'selected' if task.status=='Completed' }}>Completed</option>
+              </select>
+            </form>
+          </td>
+
+          <!-- Actions -->
+          <td style="text-align:right;">
+            <div style="display:flex;align-items:center;gap:0.4rem;justify-content:flex-end;">
+              <!-- Edit button (all tasks) -->
+              <button class="mini-btn icon-btn" onclick="openEditTaskModal({{ task.id }}, {{ task.title|tojson }}, {{ task.details|tojson }}, '{{ task.due_date }}', '{{ task.priority }}', '{{ task.status }}')" title="Edit">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </button>
+              <!-- Delete button -->
+              <form action="/student/task/{{ task.id }}/delete" method="post" style="display:inline;" onsubmit="return confirm('Delete this task?')">
+                <input type="hidden" name="_csrf" value="{{ csrf }}">
+                <button class="mini-btn icon-btn danger" type="submit" title="Delete">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4h6v2"></path></svg>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">
+            <div class="empty-state">No tasks yet — click "Add Task" to create your first one!</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</section>
+
+<!-- ── ADD TASK MODAL ── -->
+<div id="addTaskModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeAddTaskModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Add New Task
+      </h3>
+      <button class="modal-close" onclick="closeAddTaskModal()">✕</button>
+    </div>
+    <form action="/student/task" method="post" class="modal-form">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+      <div class="form-group">
+        <label for="add-title">Task Title <span class="req">*</span></label>
+        <input type="text" id="add-title" name="title" class="form-input" placeholder="e.g. Review lecture notes" required>
+      </div>
+
+      <div class="form-group">
+        <label for="add-details">Details / Notes</label>
+        <input type="text" id="add-details" name="details" class="form-input" placeholder="Optional description">
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label for="add-due">Due Date <span class="req">*</span></label>
+          <input type="date" id="add-due" name="due_date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="add-priority">Priority</label>
+          <select id="add-priority" name="priority" class="form-input">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="add-status">Initial Status</label>
+        <select id="add-status" name="status" class="form-input">
+          <option value="To Do" selected>To Do</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeAddTaskModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Create Task</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── EDIT TASK MODAL ── -->
+<div id="editTaskModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeEditTaskModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Edit Task
+      </h3>
+      <button class="modal-close" onclick="closeEditTaskModal()">✕</button>
+    </div>
+    <form id="editTaskForm" action="" method="post" class="modal-form">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+
+      <div class="form-group">
+        <label for="edit-title">Task Title <span class="req">*</span></label>
+        <input type="text" id="edit-title" name="title" class="form-input" required>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-details">Details / Notes</label>
+        <input type="text" id="edit-details" name="details" class="form-input">
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label for="edit-due">Due Date <span class="req">*</span></label>
+          <input type="date" id="edit-due" name="due_date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-priority">Priority</label>
+          <select id="edit-priority" name="priority" class="form-input">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-status">Status</label>
+        <select id="edit-status" name="status" class="form-input">
+          <option value="To Do">To Do</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeEditTaskModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'flex';
+  document.getElementById('add-title').focus();
+}
+function closeAddTaskModal() {
+  document.getElementById('addTaskModal').style.display = 'none';
+}
+
+function openEditTaskModal(id, title, details, dueDate, priority, status) {
+  document.getElementById('editTaskForm').action = '/student/task/' + id + '/edit';
+  document.getElementById('edit-title').value = title;
+  document.getElementById('edit-details').value = details;
+  document.getElementById('edit-due').value = dueDate;
+  document.getElementById('edit-priority').value = priority;
+  document.getElementById('edit-status').value = status;
+  document.getElementById('editTaskModal').style.display = 'flex';
+  document.getElementById('edit-title').focus();
+}
+function closeEditTaskModal() {
+  document.getElementById('editTaskModal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeAddTaskModal();
+    closeEditTaskModal();
+  }
+});
+</script>
 {% endblock %}
