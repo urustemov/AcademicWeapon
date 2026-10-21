@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+apss_demo.sqlite3
+apss_demo.sqlite3-*
+.apss_local_secret
+.env
+.pytest_cache/
+
+.apss_deps_ready
