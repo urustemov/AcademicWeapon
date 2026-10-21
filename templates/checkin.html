@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Weekly Check-in{% endblock %}{% block crumb %}Weekly Check-in{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow dark">STAY CONNECTED</div><h1>Weekly Check-in</h1><p>Take two minutes to reflect. Your AAC advisor can use this to offer support.</p></div></div>
+<div class="two-columns wide-left"><div class="stack">
+<section class="panel"><div class="panel-heading"><div><span class="section-overline">YOUR REFLECTION</span><h2>How are things going?</h2></div><span class="muted small">2 min</span></div>
+{% if success %}<div class="alert success">✓ Your check-in has been submitted. Thank you for sharing.</div>{% endif %}
+<form action="/student/checkin" method="post" class="form-stack padded-form"><input type="hidden" name="_csrf" value="{{csrf}}"><div class="form-group"><label class="field-title">1. How was your academic week?</label><div class="radio-chips"><label><input type="radio" name="mood" value="Good" required><span>☺ Good</span></label><label><input type="radio" name="mood" value="Okay"><span>◡ Okay</span></label><label><input type="radio" name="mood" value="Difficult"><span>◕ Difficult</span></label></div></div>
+<div class="form-group"><label class="field-title" for="challenge">2. What was your biggest challenge?</label><textarea id="challenge" name="challenge" maxlength="300" rows="3" placeholder="For example, time management, assignments, motivation..."></textarea></div>
+<div class="form-group"><label class="field-title" for="priority">3. What is your priority for next week?</label><textarea id="priority" name="priority" maxlength="300" rows="3" placeholder="The one thing you'd like to work on..."></textarea></div>
+<div class="form-group"><label class="field-title">4. Would you like support from AAC?</label><div class="radio-chips"><label><input type="radio" name="needs_help" value="yes"><span>Yes, please</span></label><label><input type="radio" name="needs_help" value="no" checked><span>Not right now</span></label></div></div>
+<button class="primary-btn large" type="submit">Submit my check-in →</button></form></section></div>
+<div class="stack"><section class="panel warm"><span class="section-overline">WHY THIS MATTERS</span><h2>A small habit, a big difference.</h2><p>Weekly check-ins help you recognize what works, address challenges early, and communicate with your advisor.</p></section><section class="panel"><div class="panel-heading"><div><span class="section-overline">HISTORY</span><h2>Previous check-ins</h2></div></div>{% for item in recent %}<div class="history-item"><span class="mood-dot {{item.mood|lower}}"></span><div><strong>{{item.mood}} week</strong><span>{{item.created_at|nice_date}}</span><p>{{item.priority or 'No priority noted'}}</p></div></div>{% else %}<p class="muted small">No check-ins yet.</p>{% endfor %}</section></div></div>
+{% endblock %}

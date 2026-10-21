@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Academic Recovery Plan{% endblock %}{% block crumb %}My Recovery Plan{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow dark">YOUR PATH TO PROGRESS</div><h1>Academic Recovery Plan</h1><p>A clear overview of your goals and the steps to reach them.</p></div><span class="outline-label">☷ &nbsp; Individual Action Plan</span></div>
+<div class="feature-banner"><div><span class="eyebrow">YOUR CURRENT PROGRESS</span><div class="feature-stat">{{pct}}% <span>of plan tasks completed</span></div><p>Keep building momentum — one task at a time.</p></div><div class="feature-track"><div class="feature-track-fill" style="width:{{pct}}%"></div></div></div>
+<section class="panel section-margin" id="goals"><div class="panel-heading"><div><span class="section-overline">THE BIG PICTURE</span><h2>My academic goals</h2></div><span class="muted small">{{goals|length}} goals</span></div><div class="goal-grid">{% for goal in goals %}<div class="goal-tile"><span class="tile-icon">◎</span><strong>{{goal.title}}</strong><p>{{goal.target}}</p><span class="tag-soft">{{goal.status}}</span></div>{% endfor %}</div></section>
+<section class="panel section-margin" id="tasks"><div class="panel-heading"><div><span class="section-overline">NEXT STEPS</span><h2>My action items</h2></div><span class="muted small">{{completed}} of {{tasks|length}} completed</span></div>
+ <div class="table-scroll"><table class="data-table"><thead><tr><th>Action</th><th>Due date</th><th>Priority</th><th>Status</th><th>Update</th></tr></thead><tbody>
+ {% for task in tasks %}<tr><td><strong>{{task.title}}</strong><div class="table-subtext">{{task.details}}</div></td><td>{{task.due_date|nice_date}}</td><td><span class="priority {{task.priority|lower}}">{{task.priority}}</span></td><td><span class="status {{task.status|lower|replace(' ','-')}}">{{task.status}}</span></td><td><form action="/student/task/{{task.id}}/status" method="post"><input type="hidden" name="_csrf" value="{{csrf}}"><button class="mini-btn" type="submit">{{'↶ Reopen' if task.status=='Completed' else '✓ Complete'}}</button></form></td></tr>{% else %}<tr><td colspan="5">No assigned tasks</td></tr>{% endfor %}
+ </tbody></table></div></section>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Sign in{% endblock %}
+{% block auth %}
+<div class="login-shell">
+ <div class="login-art"><div class="login-brand"><span class="brand-symbol light">A<span>.</span></span><span>AUCA <b>Academic Advising Center</b></span></div>
+   <div class="login-art-center"><span class="eyebrow">YOUR JOURNEY FORWARD</span><h1>Progress begins<br>with a plan<span class="orange-period">.</span></h1><p>A calmer, clearer way to navigate academic challenges — together.</p><div class="art-lines"><span></span><span></span><span></span></div></div>
+   <div class="login-art-foot">Academic Weapon <span>© 2026 · DEMO</span></div>
+ </div>
+ <div class="login-panel">
+  <div class="login-box"><div class="login-mark">A<span>.</span></div><span class="eyebrow dark">WELCOME TO ACADEMIC WEAPON</span><h2>Sign in to your workspace</h2><p class="muted login-intro">Select a demonstration account to explore the Student and AAC portals.</p>
+   {% if error %}<div class="alert danger">{{error}}</div>{% endif %}
+   <form action="/login" method="post" class="form-stack" id="loginForm">
+    <label>Email address<input id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" required></label>
+    <label>Password<input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter demo password" required></label>
+    <button class="primary-btn large" type="submit">Sign in <span>→</span></button>
+   </form>
+   <div class="demo-signin"><span class="section-overline">QUICK DEMO ACCESS</span><div class="demo-account-grid"><button class="demo-account" type="button" data-email="student@demo.example" data-password="Demo1234!"><span class="demo-account-icon">♙</span><span><strong>Student Portal</strong><small>Explore your recovery journey</small></span>→</button><button class="demo-account" type="button" data-email="advisor@demo.example" data-password="Demo1234!"><span class="demo-account-icon">▦</span><span><strong>AAC Staff Portal</strong><small>Manage students and plans</small></span>→</button></div></div>
+   <div class="login-disclaimer">🔒 <span>Local prototype. All names, accounts and academic records are fictional. Do not enter actual student information.</span></div>
+  </div>
+ </div>
+</div>
+{% endblock %}

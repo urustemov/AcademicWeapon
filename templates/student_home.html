@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}My Dashboard{% endblock %}{% block crumb %}Student Dashboard{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow dark">FALL SEMESTER · ACADEMIC SUPPORT</div><h1>Good to see you, {{student.name.split()[0]}} <span class="wave">✳</span></h1><p>One step at a time. Here's a snapshot of your academic journey.</p></div><a href="/student/plan" class="primary-btn">View my recovery plan <span>↗</span></a></div>
+<div class="stats-grid three">
+ <div class="stat-card"><span class="stat-label">CURRENT GPA <span class="stat-icon">◈</span></span><div class="stat-big">{{ '%.2f'|format(student.gpa) }}</div><div class="stat-foot">Academic snapshot <span class="subtle-pill">Demo data</span></div></div>
+ <div class="stat-card"><span class="stat-label">TASK COMPLETION <span class="stat-icon">✓</span></span><div class="stat-big">{{completed}} <span class="slash">/ {{total}}</span></div><div class="mini-track"><span style="width:{{pct}}%"></span></div></div>
+ <div class="stat-card"><span class="stat-label">UPCOMING MEETINGS <span class="stat-icon">▣</span></span><div class="stat-big">{{meetings|length}}</div><div class="stat-foot">Scheduled with your AAC advisor</div></div>
+</div>
+<div class="two-columns wide-left">
+ <div class="stack">
+  <section class="panel"><div class="panel-heading"><div><span class="section-overline">ACTION PLAN</span><h2>Your priorities</h2></div><a class="text-link" href="/student/plan">View all →</a></div>
+   <div class="task-list">
+    {% for task in tasks %}<div class="task-line"><span class="task-check {{'is-done' if task.status=='Completed' else ''}}">{{'✓' if task.status=='Completed' else ''}}</span><div class="task-body"><strong class="{{'done-text' if task.status=='Completed' else ''}}">{{task.title}}</strong><span>{{task.details}}</span></div><div class="task-right"><span class="priority {{task.priority|lower}}">{{task.priority}}</span><span class="date-small">{{task.due_date|nice_date}}</span></div></div>{% else %}<div class="empty-state">No tasks yet. Your advisor can help you make a plan.</div>{% endfor %}
+   </div>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><span class="section-overline">YOUR ROADMAP</span><h2>Academic goals</h2></div><span class="muted small">{{goals|length}} goals</span></div><div class="goal-cards">{% for goal in goals %}<div class="goal-card"><span class="goal-spark">✦</span><div><strong>{{goal.title}}</strong><span>{{goal.target}}</span></div><span class="tag-soft">{{goal.status}}</span></div>{% endfor %}</div></section>
+ </div>
+ <div class="stack">
+  <section class="panel warm"><div class="panel-heading"><div><span class="section-overline">WEEKLY REFLECTION</span><h2>How is your week going?</h2></div><span class="small-icon">✎</span></div><p>Reflect on your progress and let your advisor know if you need a little extra support.</p><a href="/student/checkin" class="dark-btn">Complete weekly check-in <span>↗</span></a></section>
+  <section class="panel"><div class="panel-heading"><div><span class="section-overline">STAY CONNECTED</span><h2>Upcoming meetings</h2></div><a href="/student/meetings" class="text-link">See all →</a></div>{% for meeting in meetings %}<div class="meeting-item"><span class="meeting-calendar"><b>{{meeting.date[8:10]}}</b><small>{{meeting.date|nice_date|truncate(3,True,'')}}</small></span><div><strong>{{meeting.topic}}</strong><span>{{meeting.advisor}}</span></div></div>{% else %}<p class="muted small">No upcoming meetings currently.</p>{% endfor %}</section>
+  <div class="tip-card"><div class="tip-icon">✧</div><strong>Progress isn't always linear.</strong><p>Small, consistent actions add up. Your AAC team is here to support you.</p></div>
+ </div>
+</div>
+{% endblock %}
