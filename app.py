@@ -12,7 +12,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import URLSafeTimedSerializer, BadSignature
@@ -165,6 +165,36 @@ def nice_datetime(value):
         return datetime.fromisoformat(value).strftime('%b %d, %Y · %H:%M')
     except (TypeError, ValueError):
         return value or '—'
+
+
+def chat_updates_payload(messages, user_id):
+    """Serialize chat rows for the live UI without exposing unrelated fields."""
+    return {
+        'messages': [
+            {
+                'id': message['id'],
+                'body': message['body'],
+                'created_at': message['created_at'],
+                'created_label': nice_datetime(message['created_at']),
+                'sender_name': 'You' if message['sender_user_id'] == user_id else message['sender_name'],
+                'own': message['sender_user_id'] == user_id,
+            }
+            for message in messages
+        ]
+    }
+
+
+def chat_after_id(request):
+    try:
+        return max(0, int(request.query_params.get('after', '0')))
+    except (TypeError, ValueError):
+        raise HTTPException(400, 'Invalid message cursor.')
+
+
+def chat_send_response(request, redirect_url):
+    if request.headers.get('x-chat-live') == '1':
+        return JSONResponse({'ok': True})
+    return bounce(redirect_url)
 
 
 def initials(value):
@@ -970,8 +1000,35 @@ def student_chat(request:Request):
     return page(
         request,'chat.html',active='student_chat',student=student,
         messages=chat_thread(sid,selected_contact['id']),contacts=contacts,selected_contact=selected_contact,
-        chat_action='/student/chat',back_url='/student',back_label='Back to Dashboard',is_aac=False,
+        chat_action='/student/chat',
+        chat_live_url=f'/student/chat/updates?contact={selected_contact["id"]}',
+        back_url='/student',back_label='Back to Dashboard',is_aac=False,
     )
+
+
+@app.get('/student/chat/updates')
+def student_chat_updates(request:Request):
+    session=gate(request,'student')
+    if not session:raise HTTPException(401,'Sign-in required.')
+    sid=session['user']['student_id']
+    student=one('SELECT * FROM students WHERE id=? AND active=1',(sid,))
+    if not student:raise HTTPException(404,'Student not found')
+    selected_contact=select_chat_contact(chat_contacts(student),request.query_params.get('contact'))
+    if not selected_contact:raise HTTPException(400,'Choose an available advising contact.')
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM chat_messages m JOIN users u ON u.id=m.sender_user_id
+           WHERE m.student_id=? AND m.staff_user_id=? AND m.id>?
+           ORDER BY m.id''',
+        (sid,selected_contact['id'],chat_after_id(request)),
+    )
+    if messages:
+        run(
+            '''UPDATE chat_messages SET read_by_student=1
+               WHERE student_id=? AND staff_user_id=? AND read_by_student=0''',
+            (sid,selected_contact['id']),
+        )
+    return JSONResponse(chat_updates_payload(messages,session['user']['id']))
 
 
 @app.post('/student/chat')
@@ -995,7 +1052,9 @@ async def student_send_chat(request:Request):
         (sid,selected_contact['id'],session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
     )
     record(session['user']['id'],f'Sent a chat message to {selected_contact["display_name"]}')
-    return bounce(f'/student/chat?contact={selected_contact["id"]}#latest')
+    return chat_send_response(
+        request,f'/student/chat?contact={selected_contact["id"]}#latest'
+    )
 
 
 @app.post('/student/schedule/course')
@@ -1418,6 +1477,33 @@ def aac_team_group_chat(request:Request):
     )
 
 
+@app.get('/aac/team-chat/updates')
+def aac_team_group_chat_updates(request:Request):
+    session=gate_staff(request)
+    if not session:raise HTTPException(401,'Sign-in required.')
+    if not is_team_group_member(session['user']):
+        raise HTTPException(403,'This group chat is limited to the four Advising Team members.')
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM team_group_messages m JOIN users u ON u.id=m.sender_user_id
+           WHERE m.id>? ORDER BY m.id''',
+        (chat_after_id(request),),
+    )
+    if messages:
+        run(
+            '''INSERT INTO team_group_reads(user_id,last_read_message_id,read_at)
+               VALUES (?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 last_read_message_id=MAX(last_read_message_id,excluded.last_read_message_id),
+                 read_at=excluded.read_at''',
+            (
+                session['user']['id'],messages[-1]['id'],
+                academic_now().isoformat(timespec='seconds'),
+            ),
+        )
+    return JSONResponse(chat_updates_payload(messages,session['user']['id']))
+
+
 @app.post('/aac/team-chat')
 async def aac_send_team_group_chat(request:Request):
     session=gate_staff(request)
@@ -1434,7 +1520,7 @@ async def aac_send_team_group_chat(request:Request):
         (session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
     )
     record(session['user']['id'],'Sent a message in the Advising Team group chat')
-    return bounce('/aac/team-chat#latest')
+    return chat_send_response(request,'/aac/team-chat#latest')
 
 
 @app.get('/aac/staff-chat/{peer_id}')
@@ -1460,6 +1546,31 @@ def aac_staff_chat(peer_id:int,request:Request):
     )
 
 
+@app.get('/aac/staff-chat/{peer_id}/updates')
+def aac_staff_chat_updates(peer_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:raise HTTPException(401,'Sign-in required.')
+    peer=internal_staff_peer(session['user'],peer_id)
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM staff_messages m JOIN users u ON u.id=m.sender_user_id
+           WHERE m.id>? AND ((m.sender_user_id=? AND m.recipient_user_id=?)
+              OR (m.sender_user_id=? AND m.recipient_user_id=?))
+           ORDER BY m.id''',
+        (
+            chat_after_id(request),session['user']['id'],peer['id'],
+            peer['id'],session['user']['id'],
+        ),
+    )
+    if messages:
+        run(
+            '''UPDATE staff_messages SET read_at=?
+               WHERE sender_user_id=? AND recipient_user_id=? AND read_at IS NULL''',
+            (academic_now().isoformat(timespec='seconds'),peer['id'],session['user']['id']),
+        )
+    return JSONResponse(chat_updates_payload(messages,session['user']['id']))
+
+
 @app.post('/aac/staff-chat/{peer_id}')
 async def aac_send_staff_chat(peer_id:int,request:Request):
     session=gate_staff(request)
@@ -1476,7 +1587,7 @@ async def aac_send_staff_chat(peer_id:int,request:Request):
         (session['user']['id'],peer['id'],body,academic_now().isoformat(timespec='seconds')),
     )
     record(session['user']['id'],f'Sent a private staff message to user #{peer["id"]}')
-    return bounce(f'/aac/staff-chat/{peer["id"]}#latest')
+    return chat_send_response(request,f'/aac/staff-chat/{peer["id"]}#latest')
 
 
 @app.get('/aac/student/{student_id}')
@@ -1524,9 +1635,35 @@ def aac_student_chat(student_id:int,request:Request):
     return page(
         request,'chat.html',active='aac_messages',student=student,
         messages=chat_thread(student_id,selected_contact['id']),contacts=contacts,selected_contact=selected_contact,
-        chat_action=f'/aac/student/{student_id}/chat',back_url=f'/aac/student/{student_id}',
+        chat_action=f'/aac/student/{student_id}/chat',
+        chat_live_url=f'/aac/student/{student_id}/chat/updates?contact={selected_contact["id"]}',
+        back_url=f'/aac/student/{student_id}',
         back_label='Back to Student Profile',is_aac=True,
     )
+
+
+@app.get('/aac/student/{student_id}/chat/updates')
+def aac_student_chat_updates(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:raise HTTPException(401,'Sign-in required.')
+    student=allowed_student(student_id,session)
+    selected_contact=staff_chat_contact(
+        student,session['user'],request.query_params.get('contact')
+    )
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM chat_messages m JOIN users u ON u.id=m.sender_user_id
+           WHERE m.student_id=? AND m.staff_user_id=? AND m.id>?
+           ORDER BY m.id''',
+        (student_id,selected_contact['id'],chat_after_id(request)),
+    )
+    if messages:
+        run(
+            '''UPDATE chat_messages SET read_by_aac=1
+               WHERE student_id=? AND staff_user_id=? AND read_by_aac=0''',
+            (student_id,selected_contact['id']),
+        )
+    return JSONResponse(chat_updates_payload(messages,session['user']['id']))
 
 
 @app.post('/aac/student/{student_id}/chat')
@@ -1546,7 +1683,10 @@ async def aac_send_chat(student_id:int,request:Request):
         (student_id,selected_contact['id'],session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
     )
     record(session['user']['id'],f'Sent a chat message to student #{student_id}')
-    return bounce(f'/aac/student/{student_id}/chat?contact={selected_contact["id"]}#latest')
+    return chat_send_response(
+        request,
+        f'/aac/student/{student_id}/chat?contact={selected_contact["id"]}#latest',
+    )
 
 
 

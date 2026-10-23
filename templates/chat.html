@@ -64,10 +64,10 @@
       <span class="workspace-dot" title="Account active"></span>
     </header>
 
-    <div class="chat-thread" data-chat-thread aria-live="polite">
+    <div class="chat-thread" data-chat-thread data-chat-live-url="{{ chat_live_url }}" aria-live="polite">
       {% for message in messages %}
       {% set own_side = message.sender_user_id == user.id %}
-      <div class="chat-message-row {{ 'own' if own_side else 'other' }}" {% if loop.last %}id="latest"{% endif %}>
+      <div class="chat-message-row {{ 'own' if own_side else 'other' }}" data-chat-message-id="{{ message.id }}" {% if loop.last %}id="latest"{% endif %}>
         <div class="chat-message-meta">
           <span>{{ 'You' if message.sender_user_id == user.id else message.sender_name }}</span>
           <time datetime="{{ message.created_at }}">{{ message.created_at|nice_datetime }}</time>

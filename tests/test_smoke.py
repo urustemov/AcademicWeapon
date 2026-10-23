@@ -45,6 +45,7 @@ def test_local_password_login_is_disabled_outside_demo(monkeypatch):
 def test_private_chat_permissions_and_unread_state():
     advisor_body='<b>Can we review the private-chat test plan?</b>'
     student_body='Yes, private-chat test received.'
+    advisor_id=db.one('SELECT id FROM users WHERE email=?',('advisor@demo.example',))['id']
 
     with TestClient(app,follow_redirects=False) as staff:
         assert staff.post('/login',data={'email':'advisor@demo.example','password':'Demo1234!'}).status_code==303
@@ -78,8 +79,18 @@ def test_private_chat_permissions_and_unread_state():
         inbox=staff.get('/aac/messages')
         assert inbox.status_code==200 and student_body in inbox.text
         assert db.one('SELECT read_by_aac FROM chat_messages WHERE id=?',(student_message['id'],))['read_by_aac']==0
-        assert staff.get('/aac/student/1/chat').status_code==200
+        updates=staff.get(
+            f'/aac/student/1/chat/updates?contact={advisor_id}&after={advisor_message["id"]}'
+        )
+        assert updates.status_code==200
+        assert updates.json()['messages']==[{
+            'id':student_message['id'],'body':student_body,
+            'created_at':student_message['created_at'],
+            'created_label':app_module.nice_datetime(student_message['created_at']),
+            'sender_name':'Alex Morgan','own':False,
+        }]
         assert db.one('SELECT read_by_aac FROM chat_messages WHERE id=?',(student_message['id'],))['read_by_aac']==1
+        assert staff.get('/aac/student/1/chat').status_code==200
 
 
 def test_three_roles_and_direct_contact_isolation():
@@ -186,12 +197,17 @@ def test_private_team_to_advisor_chat():
         assert advisor.post('/login',data={'email':'internal.advisor@demo.example','password':'Demo1234!'}).status_code==303
         inbox=advisor.get('/aac/messages')
         assert inbox.status_code==200 and first_message in inbox.text
+        updates=advisor.get(f'/aac/staff-chat/{team_id}/updates?after=0')
+        assert updates.status_code==200
+        assert updates.json()['messages'][-1]['body']==first_message
+        assert updates.json()['messages'][-1]['own'] is False
         thread=advisor.get(f'/aac/staff-chat/{team_id}')
         assert thread.status_code==200 and first_message in thread.text
         csrf=app_module.signer.loads(advisor.cookies['apss_demo_session'])['csrf']
-        assert advisor.post(f'/aac/staff-chat/{team_id}',data={
+        live_send=advisor.post(f'/aac/staff-chat/{team_id}',data={
             '_csrf':csrf,'body':reply,
-        }).status_code==303
+        },headers={'X-Chat-Live':'1','Accept':'application/json'})
+        assert live_send.status_code==200 and live_send.json()=={'ok':True}
         assert advisor.get(f'/aac/staff-chat/{advisor_id}').status_code==403
 
     with TestClient(app,follow_redirects=False) as team:
@@ -224,6 +240,7 @@ def test_named_advising_team_group_chat_and_unread_state():
     )
     assert outsider_id and len(member_ids)==4
     body='<b>Private four-person group message.</b>'
+    live_body='Message sent without a page refresh.'
 
     with TestClient(app,follow_redirects=False) as serdar:
         assert serdar.post('/login',data={
@@ -234,14 +251,22 @@ def test_named_advising_team_group_chat_and_unread_state():
         assert '4 members' in inbox.text
         csrf=app_module.signer.loads(serdar.cookies['apss_demo_session'])['csrf']
         assert serdar.post('/aac/team-chat',data={'_csrf':csrf,'body':body}).status_code==303
+        live_send=serdar.post(
+            '/aac/team-chat',data={'_csrf':csrf,'body':live_body},
+            headers={'X-Chat-Live':'1','Accept':'application/json'},
+        )
+        assert live_send.status_code==200 and live_send.json()=={'ok':True}
 
     with TestClient(app,follow_redirects=False) as umut:
         assert umut.post('/login',data={
             'email':'kydyrgychova_u@auca.kg','password':'Demo1234!',
         }).status_code==303
         inbox=umut.get('/aac/messages')
-        assert '&lt;b&gt;Private four-person group message.&lt;/b&gt;' in inbox.text
-        assert '1 unread' in inbox.text
+        assert live_body in inbox.text and '2 unread' in inbox.text
+        updates=umut.get('/aac/team-chat/updates?after=0')
+        assert updates.status_code==200
+        assert [message['body'] for message in updates.json()['messages'][-2:]]==[body,live_body]
+        assert updates.json()['messages'][-1]['own'] is False
         thread=umut.get('/aac/team-chat')
         assert thread.status_code==200
         assert '&lt;b&gt;Private four-person group message.&lt;/b&gt;' in thread.text
@@ -257,6 +282,7 @@ def test_named_advising_team_group_chat_and_unread_state():
         }).status_code==303
         assert 'Advising Team · Group Chat' not in outsider.get('/aac/messages').text
         assert outsider.get('/aac/team-chat').status_code==403
+        assert outsider.get('/aac/team-chat/updates?after=0').status_code==403
         csrf=app_module.signer.loads(outsider.cookies['apss_demo_session'])['csrf']
         assert outsider.post('/aac/team-chat',data={'_csrf':csrf,'body':'Forbidden'}).status_code==403
 

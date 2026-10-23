@@ -95,14 +95,87 @@
     link.addEventListener('click', closeSidebar);
   });
 
-  // --- Private advising chat ---
+  // --- Live private and group chats ---
   const chatThread = document.querySelector('[data-chat-thread]');
   const chatForm = document.querySelector('[data-chat-form]');
   const chatInput = document.querySelector('[data-chat-input]');
   const chatCount = document.querySelector('[data-chat-count]');
+  const chatLiveUrl = chatThread ? chatThread.dataset.chatLiveUrl : '';
+  let chatLastMessageId = chatThread
+    ? Math.max(0, ...[...chatThread.querySelectorAll('[data-chat-message-id]')]
+      .map((row) => Number(row.dataset.chatMessageId) || 0))
+    : 0;
+  let chatPolling = false;
 
   if (chatThread) {
     chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  const appendChatMessage = (message, forceScroll = false) => {
+    if (!chatThread || !message || Number(message.id) <= chatLastMessageId) return;
+    const wasNearBottom = chatThread.scrollHeight - chatThread.scrollTop - chatThread.clientHeight < 120;
+    const emptyState = chatThread.querySelector('.chat-empty');
+    if (emptyState) emptyState.remove();
+    const previousLatest = chatThread.querySelector('#latest');
+    if (previousLatest) previousLatest.removeAttribute('id');
+
+    const row = document.createElement('div');
+    row.className = `chat-message-row ${message.own ? 'own' : 'other'}`;
+    row.dataset.chatMessageId = String(message.id);
+    row.id = 'latest';
+
+    const meta = document.createElement('div');
+    meta.className = 'chat-message-meta';
+    const sender = document.createElement('span');
+    sender.textContent = message.sender_name;
+    const timestamp = document.createElement('time');
+    timestamp.dateTime = message.created_at;
+    timestamp.textContent = message.created_label;
+    meta.append(sender, timestamp);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.textContent = message.body;
+    row.append(meta, bubble);
+    chatThread.append(row);
+    chatLastMessageId = Number(message.id);
+
+    if (wasNearBottom || forceScroll || message.own) {
+      chatThread.scrollTop = chatThread.scrollHeight;
+    }
+  };
+
+  const fetchChatMessages = async (forceScroll = false) => {
+    if (!chatLiveUrl || chatPolling || document.hidden) return;
+    chatPolling = true;
+    try {
+      const url = new URL(chatLiveUrl, window.location.origin);
+      url.searchParams.set('after', String(chatLastMessageId));
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (response.status === 401) {
+        window.location.assign('/login');
+        return;
+      }
+      if (!response.ok) throw new Error(`Chat update failed: ${response.status}`);
+      const payload = await response.json();
+      (payload.messages || []).forEach((message) => appendChatMessage(message, forceScroll));
+    } catch (error) {
+      // A later poll retries automatically; keep the current conversation usable offline.
+      console.warn(error);
+    } finally {
+      chatPolling = false;
+    }
+  };
+
+  if (chatThread && chatLiveUrl) {
+    window.setInterval(() => fetchChatMessages(false), 1500);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) fetchChatMessages(true);
+    });
   }
 
   if (chatInput && chatCount) {
@@ -117,6 +190,37 @@
       }
     });
     updateChatCount();
+  }
+
+  if (chatForm && chatInput && chatLiveUrl) {
+    chatForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!chatInput.reportValidity()) return;
+      const submitButton = chatForm.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
+      try {
+        const response = await fetch(chatForm.action, {
+          method: 'POST',
+          body: new FormData(chatForm),
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Chat-Live': '1' },
+        });
+        if (response.status === 401) {
+          window.location.assign('/login');
+          return;
+        }
+        if (!response.ok) throw new Error(`Message could not be sent: ${response.status}`);
+        chatInput.value = '';
+        chatInput.dispatchEvent(new Event('input'));
+        await fetchChatMessages(true);
+        chatInput.focus();
+      } catch (error) {
+        console.warn(error);
+        window.alert('The message could not be sent. Please check your connection and try again.');
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+      }
+    });
   }
 
   // --- Quick Demo Account Selector (Login Page) ---
