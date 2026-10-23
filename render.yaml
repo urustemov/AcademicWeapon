@@ -8,6 +8,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --no-server-header
     healthCheckPath: /healthz
+    domains:
+      - advising.auca.kg
     envVars:
       - key: APP_ENV
         value: production
@@ -26,7 +28,7 @@ services:
       - key: SESSION_TTL_SECONDS
         value: "43200"
       - key: ALLOWED_HOSTS
-        value: "*.onrender.com"
+        value: "*.onrender.com,advising.auca.kg"
       - key: LOGIN_RATE_LIMIT
         value: "20"
       - key: LOGIN_RATE_WINDOW_SECONDS
