@@ -6,7 +6,7 @@
   <div>
     <div class="eyebrow dark">AAC COMMUNICATIONS</div>
     <h1>Messages</h1>
-    <p>Private student conversations and direct coordination between Advising Team and Advisors.</p>
+    <p>Private student conversations, direct staff coordination, and the restricted Advising Team channel.</p>
   </div>
   <span class="outline-label">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>
@@ -14,11 +14,40 @@
   </span>
 </div>
 
+{% if team_group %}
+<section class="panel messages-panel staff-messages-panel">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">RESTRICTED TEAM CHANNEL</span>
+      <h2>Advising Team Group</h2>
+    </div>
+    <span class="muted small">{{ team_group.members|length }} members</span>
+  </div>
+  <div class="message-thread-list">
+    <a class="message-thread-item {{ 'unread' if team_group.unread_count else '' }}" href="/aac/team-chat">
+      <span class="person-avatar">AT</span>
+      <span class="message-thread-copy">
+        <span class="message-thread-title">
+          <strong>Advising Team · Group Chat</strong>
+          {% if team_group.last_message_at %}<time>{{ team_group.last_message_at|nice_datetime }}</time>{% endif %}
+        </span>
+        <span class="message-thread-preview">
+          {% if team_group.last_message %}{{ team_group.last_sender }}: {{ team_group.last_message }}{% else %}No messages yet — start the team conversation{% endif %}
+        </span>
+        <small>{{ team_group.member_names }}</small>
+      </span>
+      {% if team_group.unread_count %}<span class="message-unread">{{ team_group.unread_count }}</span>{% endif %}
+      <svg class="message-thread-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </a>
+  </div>
+</section>
+{% endif %}
+
 <details class="panel messages-panel staff-messages-panel collapsible-message-list" data-message-directory="advisors">
   <summary class="panel-heading">
     <div>
       <span class="section-overline">STAFF COORDINATION</span>
-      <h2>{{ 'Advisors' if user.role == 'advising_team' else 'Advising Team' }}</h2>
+      <h2>{{ 'Staff Contacts' if user.role == 'advising_team' else 'Advising Team' }}</h2>
     </div>
     <span class="message-directory-summary">
       <span class="muted small">{{ staff_contacts|length }} contacts</span>

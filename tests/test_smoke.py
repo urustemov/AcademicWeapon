@@ -155,6 +155,7 @@ def test_private_team_to_advisor_chat():
     assert advisor_id and team_id and other_team_id
     first_message='Confidential question for the assigned Advisor.'
     reply='Confidential Advisor reply.'
+    team_message='Private coordination between two Advising Team members.'
 
     with TestClient(app,follow_redirects=False) as team:
         assert team.post('/login',data={'email':'internal.team@demo.example','password':'Demo1234!'}).status_code==303
@@ -176,7 +177,10 @@ def test_private_team_to_advisor_chat():
         assert first_message not in other_team.get('/aac/messages').text
         own_thread=other_team.get(f'/aac/staff-chat/{advisor_id}')
         assert own_thread.status_code==200 and first_message not in own_thread.text
-        assert other_team.get(f'/aac/staff-chat/{team_id}').status_code==403
+        csrf=app_module.signer.loads(other_team.cookies['apss_demo_session'])['csrf']
+        assert other_team.post(f'/aac/staff-chat/{team_id}',data={
+            '_csrf':csrf,'body':team_message,
+        }).status_code==303
 
     with TestClient(app,follow_redirects=False) as advisor:
         assert advisor.post('/login',data={'email':'internal.advisor@demo.example','password':'Demo1234!'}).status_code==303
@@ -193,10 +197,72 @@ def test_private_team_to_advisor_chat():
     with TestClient(app,follow_redirects=False) as team:
         assert team.post('/login',data={'email':'internal.team@demo.example','password':'Demo1234!'}).status_code==303
         assert reply in team.get(f'/aac/staff-chat/{advisor_id}').text
+        assert team_message in team.get(f'/aac/staff-chat/{other_team_id}').text
 
     with TestClient(app,follow_redirects=False) as student:
         assert student.post('/login',data={'email':'student@demo.example','password':'Demo1234!'}).status_code==303
         assert student.get(f'/aac/staff-chat/{advisor_id}').status_code==403
+
+
+def test_named_advising_team_group_chat_and_unread_state():
+    members=(
+        ('urustemov_s@auca.kg','Serdar Urustemov'),
+        ('kydyrgychova_u@auca.kg','Umut Kydyrgychova'),
+        ('tynyeva_a@auca.kg','Aizada Tynyeva'),
+        ('zhakypov_a@auca.kg','Aidar Zhakypov'),
+    )
+    member_ids={}
+    for email,name in members:
+        member_ids[email]=db.run(
+            '''INSERT INTO users(email,display_name,role,student_id,password_hash)
+               VALUES (?,?,?,?,?)''',
+            (email,name,'advising_team',None,db.password_hash('Demo1234!')),
+        )
+    outsider_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('nonmember.team@demo.example','Nonmember Team','advising_team',None,db.password_hash('Demo1234!')),
+    )
+    assert outsider_id and len(member_ids)==4
+    body='<b>Private four-person group message.</b>'
+
+    with TestClient(app,follow_redirects=False) as serdar:
+        assert serdar.post('/login',data={
+            'email':'urustemov_s@auca.kg','password':'Demo1234!',
+        }).status_code==303
+        inbox=serdar.get('/aac/messages')
+        assert inbox.status_code==200 and 'Advising Team · Group Chat' in inbox.text
+        assert '4 members' in inbox.text
+        csrf=app_module.signer.loads(serdar.cookies['apss_demo_session'])['csrf']
+        assert serdar.post('/aac/team-chat',data={'_csrf':csrf,'body':body}).status_code==303
+
+    with TestClient(app,follow_redirects=False) as umut:
+        assert umut.post('/login',data={
+            'email':'kydyrgychova_u@auca.kg','password':'Demo1234!',
+        }).status_code==303
+        inbox=umut.get('/aac/messages')
+        assert '&lt;b&gt;Private four-person group message.&lt;/b&gt;' in inbox.text
+        assert '1 unread' in inbox.text
+        thread=umut.get('/aac/team-chat')
+        assert thread.status_code==200
+        assert '&lt;b&gt;Private four-person group message.&lt;/b&gt;' in thread.text
+        assert db.one(
+            'SELECT last_read_message_id FROM team_group_reads WHERE user_id=?',
+            (member_ids['kydyrgychova_u@auca.kg'],),
+        )['last_read_message_id']>0
+        assert '0 unread' in umut.get('/aac/messages').text
+
+    with TestClient(app,follow_redirects=False) as outsider:
+        assert outsider.post('/login',data={
+            'email':'nonmember.team@demo.example','password':'Demo1234!',
+        }).status_code==303
+        assert 'Advising Team · Group Chat' not in outsider.get('/aac/messages').text
+        assert outsider.get('/aac/team-chat').status_code==403
+        csrf=app_module.signer.loads(outsider.cookies['apss_demo_session'])['csrf']
+        assert outsider.post('/aac/team-chat',data={'_csrf':csrf,'body':'Forbidden'}).status_code==403
+
+    with TestClient(app,follow_redirects=False) as student:
+        assert student.post('/login',data={'email':'student@demo.example','password':'Demo1234!'}).status_code==303
+        assert student.get('/aac/team-chat').status_code==403
 
 
 def test_meeting_edits_follow_creator_role_and_owner():

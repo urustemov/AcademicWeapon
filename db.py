@@ -179,6 +179,21 @@ def seed_database():
           ON staff_messages(sender_user_id,recipient_user_id,id);
         CREATE INDEX IF NOT EXISTS staff_messages_unread_idx
           ON staff_messages(recipient_user_id,read_at,id);
+        CREATE TABLE IF NOT EXISTS team_group_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sender_user_id INTEGER NOT NULL,
+          body TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(sender_user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS team_group_messages_created_idx
+          ON team_group_messages(id);
+        CREATE TABLE IF NOT EXISTS team_group_reads (
+          user_id INTEGER PRIMARY KEY,
+          last_read_message_id INTEGER NOT NULL DEFAULT 0,
+          read_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS audit_logs (
           id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
           event TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

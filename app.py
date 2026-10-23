@@ -198,7 +198,36 @@ COURSE_SLOTS = (
 )
 
 STAFF_ROLES = {'advisor', 'advising_team'}
+ADVISING_TEAM_GROUP_EMAILS = frozenset({
+    'urustemov_s@auca.kg',
+    'kydyrgychova_u@auca.kg',
+    'tynyeva_a@auca.kg',
+    'zhakypov_a@auca.kg',
+})
 CASE_STATUSES = ('Initial Assessment', 'On Track', 'Needs Review')
+
+
+def is_team_group_member(user):
+    """The shared channel is restricted to the four named Advising Team members."""
+    return bool(
+        user
+        and user.get('role') == 'advising_team'
+        and str(user.get('email', '')).strip().casefold() in ADVISING_TEAM_GROUP_EMAILS
+    )
+
+
+def team_group_unread_count(user):
+    if not is_team_group_member(user):
+        return 0
+    unread = one(
+        '''SELECT COUNT(*) AS total FROM team_group_messages
+           WHERE sender_user_id<>?
+             AND id>COALESCE(
+               (SELECT last_read_message_id FROM team_group_reads WHERE user_id=?),0
+             )''',
+        (user['id'],user['id']),
+    )
+    return unread['total'] if unread else 0
 
 
 def academic_now():
@@ -416,6 +445,7 @@ def page(request, template, **data):
             (user['id'],),
         )
         unread_chat_count += internal_unread['total'] if internal_unread else 0
+        unread_chat_count += team_group_unread_count(user)
     return templates.TemplateResponse(request=request,name=template,context={
         'user':user, 'csrf':session['csrf'] if session else '',
         'today':academic_now().date().isoformat(), 'active':data.pop('active',''),
@@ -844,21 +874,33 @@ def internal_staff_peer(user, peer_id):
            WHERE id=? AND active=1 AND role IN ('advisor','advising_team')''',
         (peer_id,),
     )
-    allowed_pair = peer and {
-        user['role'],peer['role']
-    } == {'advisor','advising_team'}
+    allowed_pair = (
+        peer
+        and peer['id'] != user['id']
+        and 'advising_team' in {user['role'],peer['role']}
+    )
     if not allowed_pair:
-        raise HTTPException(403,'Internal chat is available only between Advising Team and Advisors.')
+        raise HTTPException(
+            403,
+            'Internal chat is available between Advising Team members and their Advisor contacts.',
+        )
     return peer
 
 
 def internal_staff_contacts(user):
-    target_role = 'advisor' if user['role'] == 'advising_team' else 'advising_team'
-    contacts = all_rows(
-        '''SELECT id,email,display_name,role FROM users
-           WHERE active=1 AND role=? ORDER BY display_name COLLATE NOCASE''',
-        (target_role,),
-    )
+    if user['role'] == 'advising_team':
+        contacts = all_rows(
+            '''SELECT id,email,display_name,role FROM users
+               WHERE active=1 AND role IN ('advisor','advising_team') AND id<>?
+               ORDER BY role='advising_team' DESC,display_name COLLATE NOCASE''',
+            (user['id'],),
+        )
+    else:
+        contacts = all_rows(
+            '''SELECT id,email,display_name,role FROM users
+               WHERE active=1 AND role='advising_team'
+               ORDER BY display_name COLLATE NOCASE'''
+        )
     for contact in contacts:
         last = one(
             '''SELECT body,created_at FROM staff_messages
@@ -881,6 +923,33 @@ def internal_staff_contacts(user):
         contact['display_name'].casefold(),
     ))
     return contacts
+
+
+def team_group_context(user):
+    if not is_team_group_member(user):
+        return None
+    placeholders = ','.join('?' for _ in ADVISING_TEAM_GROUP_EMAILS)
+    members = all_rows(
+        f'''SELECT id,email,display_name FROM users
+            WHERE active=1 AND role='advising_team'
+              AND LOWER(email) IN ({placeholders})
+            ORDER BY display_name COLLATE NOCASE''',
+        tuple(sorted(ADVISING_TEAM_GROUP_EMAILS)),
+    )
+    latest = one(
+        '''SELECT m.body,m.created_at,u.display_name AS sender_name
+           FROM team_group_messages m
+           JOIN users u ON u.id=m.sender_user_id
+           ORDER BY m.id DESC LIMIT 1'''
+    )
+    return {
+        'members':members,
+        'member_names':', '.join(member['display_name'] for member in members),
+        'last_message':latest['body'] if latest else '',
+        'last_message_at':latest['created_at'] if latest else '',
+        'last_sender':latest['sender_name'] if latest else '',
+        'unread_count':team_group_unread_count(user),
+    }
 
 
 @app.get('/student/chat')
@@ -1317,7 +1386,55 @@ def aac_messages(request:Request):
     return page(
         request,'messages.html',active='aac_messages',threads=threads,
         staff_contacts=internal_staff_contacts(session['user']),
+        team_group=team_group_context(session['user']),
     )
+
+
+@app.get('/aac/team-chat')
+def aac_team_group_chat(request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    if not is_team_group_member(session['user']):
+        raise HTTPException(403,'This group chat is limited to the four Advising Team members.')
+    context=team_group_context(session['user'])
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM team_group_messages m
+           JOIN users u ON u.id=m.sender_user_id
+           ORDER BY m.id'''
+    )
+    last_message_id=messages[-1]['id'] if messages else 0
+    run(
+        '''INSERT INTO team_group_reads(user_id,last_read_message_id,read_at)
+           VALUES (?,?,?)
+           ON CONFLICT(user_id) DO UPDATE SET
+             last_read_message_id=excluded.last_read_message_id,
+             read_at=excluded.read_at''',
+        (session['user']['id'],last_message_id,academic_now().isoformat(timespec='seconds')),
+    )
+    return page(
+        request,'team_chat.html',active='aac_messages',messages=messages,
+        members=context['members'],
+    )
+
+
+@app.post('/aac/team-chat')
+async def aac_send_team_group_chat(request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    if not is_team_group_member(session['user']):
+        raise HTTPException(403,'This group chat is limited to the four Advising Team members.')
+    form=await request.form();verify_csrf(request,session,form)
+    body=str(form.get('body','')).strip()
+    if not body:raise HTTPException(400,'Message cannot be empty')
+    if len(body)>2000:raise HTTPException(400,'Message is too long')
+    run(
+        '''INSERT INTO team_group_messages(sender_user_id,body,created_at)
+           VALUES (?,?,?)''',
+        (session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
+    )
+    record(session['user']['id'],'Sent a message in the Advising Team group chat')
+    return bounce('/aac/team-chat#latest')
 
 
 @app.get('/aac/staff-chat/{peer_id}')
