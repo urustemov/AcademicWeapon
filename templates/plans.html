@@ -24,7 +24,7 @@
       </span>
     </div>
     <h2>{{ s.name }}</h2>
-    <p>{{ s.program }} · Year {{ s.year }}</p>
+    <p>{{ s.program }} · {{ s.year|year_label }}</p>
     <div class="index-footer">
       <span>{{ s.goals_count }} Academic Goals</span>
       <span class="status {{ s.status|lower|replace(' ', '-') }}">{{ s.status }}</span>

@@ -32,14 +32,14 @@
 
   <div class="stat-card">
     <div class="stat-label">
-      <span>Active Plans</span>
+      <span>On Track</span>
       <span class="stat-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
       </span>
     </div>
-    <div class="stat-big">{{ stat.active }}</div>
+    <div class="stat-big">{{ stat.on_track }}</div>
     <div class="stat-foot">
-      <span>In active progress</span>
+      <span>Progressing as expected</span>
       <span class="subtle-pill">Recovery</span>
     </div>
   </div>
@@ -143,7 +143,7 @@
         </span>
         <div>
           <strong>{{ meeting.name }} · {{ meeting.topic }}</strong>
-          <span>{{ meeting.date|nice_date }}</span>
+          <span>{{ meeting.date|nice_date }}{% if meeting.time %} · {{ meeting.time }}{% endif %}</span>
         </div>
         <span class="arrow-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>

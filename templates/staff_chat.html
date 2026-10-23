@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Staff Chat · {{ peer.display_name }}{% endblock %}
+{% block crumb %}Messages / {{ peer.display_name }}{% endblock %}
+{% block content %}
+<a href="/aac/messages" class="back-link">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+  <span>Back to Messages</span>
+</a>
+
+<div class="page-heading chat-page-heading">
+  <div>
+    <div class="eyebrow dark">PRIVATE STAFF COORDINATION</div>
+    <h1>{{ peer.display_name }}</h1>
+    <p>A direct conversation between you and this {{ 'Advisor' if peer.role == 'advisor' else 'Advising Team member' }}.</p>
+  </div>
+  <span class="chat-secure-label">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+    Private conversation
+  </span>
+</div>
+
+<div class="chat-layout">
+  <section class="panel chat-panel">
+    <header class="chat-participant">
+      <span class="profile-avatar chat-avatar">{{ peer.display_name|initials }}</span>
+      <div>
+        <strong>{{ peer.display_name }}</strong>
+        <span>{{ 'Advisor' if peer.role == 'advisor' else 'Advising Team' }} · {{ peer.email }}</span>
+      </div>
+      <span class="workspace-dot" title="Account active"></span>
+    </header>
+
+    <div class="chat-thread" data-chat-thread aria-live="polite">
+      {% for message in messages %}
+      {% set own_side = message.sender_user_id == user.id %}
+      <div class="chat-message-row {{ 'own' if own_side else 'other' }}" {% if loop.last %}id="latest"{% endif %}>
+        <div class="chat-message-meta">
+          <span>{{ 'You' if own_side else message.sender_name }}</span>
+          <time datetime="{{ message.created_at }}">{{ message.created_at|nice_datetime }}</time>
+        </div>
+        <div class="chat-bubble">{{ message.body }}</div>
+      </div>
+      {% else %}
+      <div class="chat-empty">
+        <span class="chat-empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
+        </span>
+        <strong>No messages yet</strong>
+        <p>Start a private staff conversation.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="/aac/staff-chat/{{ peer.id }}" class="chat-composer" data-chat-form>
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label for="staffChatMessage" class="sr-only">Message</label>
+      <textarea id="staffChatMessage" name="body" rows="2" maxlength="2000" required placeholder="Write a message…" data-chat-input></textarea>
+      <div class="chat-composer-footer">
+        <span><b data-chat-count>0</b>/2000 · Ctrl/⌘ + Enter to send</span>
+        <button type="submit" class="primary-btn">Send message</button>
+      </div>
+    </form>
+  </section>
+
+  <aside class="chat-context-card">
+    <span class="section-overline">CONFIDENTIAL STAFF CHANNEL</span>
+    <h2>One-to-one conversation</h2>
+    <p>Only you and {{ peer.display_name }} can read this thread. Other Advisors and Advising Team members cannot access it.</p>
+    <dl class="chat-facts compact">
+      <div><dt>Contact</dt><dd>{{ peer.display_name }}</dd></div>
+      <div><dt>Role</dt><dd>{{ 'Advisor' if peer.role == 'advisor' else 'Advising Team' }}</dd></div>
+      <div><dt>Email</dt><dd>{{ peer.email }}</dd></div>
+    </dl>
+  </aside>
+</div>
+{% endblock %}

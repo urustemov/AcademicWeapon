@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Messages{% endblock %}
+{% block crumb %}Messages{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">AAC COMMUNICATIONS</div>
+    <h1>Messages</h1>
+    <p>Private student conversations and direct coordination between Advising Team and Advisors.</p>
+  </div>
+  <span class="outline-label">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>
+    {{ unread_chat_count }} unread
+  </span>
+</div>
+
+<details class="panel messages-panel staff-messages-panel collapsible-message-list" data-message-directory="advisors">
+  <summary class="panel-heading">
+    <div>
+      <span class="section-overline">STAFF COORDINATION</span>
+      <h2>{{ 'Advisors' if user.role == 'advising_team' else 'Advising Team' }}</h2>
+    </div>
+    <span class="message-directory-summary">
+      <span class="muted small">{{ staff_contacts|length }} contacts</span>
+      <svg class="message-directory-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </span>
+  </summary>
+
+  <div class="message-list-tools">
+    <label class="search-wrap">
+      <span aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
+      <span class="sr-only">Search staff contacts</span>
+      <input type="search" placeholder="Search by name or email…" autocomplete="off" data-message-search>
+    </label>
+    <span class="muted small" data-message-result-count>{{ staff_contacts|length }} shown</span>
+  </div>
+
+  <div class="message-thread-list">
+    {% for contact in staff_contacts %}
+    <a class="message-thread-item {{ 'unread' if contact.unread_count else '' }}" href="/aac/staff-chat/{{ contact.id }}" data-message-item data-search-text="{{ contact.display_name }} {{ contact.email }} {{ 'Advisor' if contact.role == 'advisor' else 'Advising Team' }}">
+      <span class="person-avatar">{{ contact.display_name|initials }}</span>
+      <span class="message-thread-copy">
+        <span class="message-thread-title">
+          <strong>{{ contact.display_name }}</strong>
+          {% if contact.last_message_at %}<time>{{ contact.last_message_at|nice_datetime }}</time>{% endif %}
+        </span>
+        <span class="message-thread-preview">{{ contact.last_message if contact.last_message else 'No messages yet — start a private conversation' }}</span>
+        <small>{{ 'Advisor' if contact.role == 'advisor' else 'Advising Team' }} · {{ contact.email }}</small>
+      </span>
+      {% if contact.unread_count %}<span class="message-unread">{{ contact.unread_count }}</span>{% endif %}
+      <svg class="message-thread-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </a>
+    {% else %}
+    <div class="empty-state">No active staff contacts are available.</div>
+    {% endfor %}
+    <div class="empty-state" data-message-no-results hidden>No matching staff contacts.</div>
+  </div>
+</details>
+
+<details class="panel messages-panel collapsible-message-list" data-message-directory="students">
+  <summary class="panel-heading">
+    <div>
+      <span class="section-overline">PRIVATE CONVERSATIONS</span>
+      <h2>Students</h2>
+    </div>
+    <span class="message-directory-summary">
+      <span class="muted small">{{ threads|length }} students</span>
+      <svg class="message-directory-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </span>
+  </summary>
+
+  <div class="message-list-tools">
+    <label class="search-wrap">
+      <span aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
+      <span class="sr-only">Search students</span>
+      <input type="search" placeholder="Search by name, student code, or department…" autocomplete="off" data-message-search>
+    </label>
+    <span class="muted small" data-message-result-count>{{ threads|length }} shown</span>
+  </div>
+
+  <div class="message-thread-list">
+    {% for thread in threads %}
+    <a class="message-thread-item {{ 'unread' if thread.unread_count else '' }}" href="/aac/student/{{ thread.id }}/chat{% if thread.last_contact_id %}?contact={{ thread.last_contact_id }}{% endif %}" data-message-item data-search-text="{{ thread.name }} {{ thread.student_code }} {{ thread.program }}">
+      <span class="person-avatar">{{ thread.avatar }}</span>
+      <span class="message-thread-copy">
+        <span class="message-thread-title">
+          <strong>{{ thread.name }}</strong>
+          {% if thread.last_message_at %}<time>{{ thread.last_message_at|nice_datetime }}</time>{% endif %}
+        </span>
+        <span class="message-thread-preview">{{ thread.last_message if thread.last_message else 'No messages yet — start a conversation' }}</span>
+        <small>{{ thread.student_code }} · {{ thread.program }}</small>
+      </span>
+      {% if thread.unread_count %}<span class="message-unread">{{ thread.unread_count }}</span>{% endif %}
+      <svg class="message-thread-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </a>
+    {% else %}
+    <div class="empty-state">No active student accounts are available.</div>
+    {% endfor %}
+    <div class="empty-state" data-message-no-results hidden>No matching students.</div>
+  </div>
+</details>
+{% endblock %}

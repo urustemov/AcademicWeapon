@@ -6,7 +6,7 @@
   <div>
     <div class="eyebrow dark">AUDIT TRAIL &amp; COMPLIANCE</div>
     <h1>Recent Advising Activity</h1>
-    <p>A chronological record of case updates, goal revisions, and check-in submissions across the AAC workspace.</p>
+    <p>{% if user.role == 'advising_team' %}A chronological record of student, Advisor, and Advising Team activity across the workspace.{% else %}A chronological record of your activity and changes made by your assigned advisees.{% endif %}</p>
   </div>
   <span class="outline-label">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -20,7 +20,7 @@
       <span class="section-overline">LOCAL AUDIT RECORD</span>
       <h2>System activity history</h2>
     </div>
-    <span class="muted small">Chronological demo log</span>
+    <span class="muted small">Chronological audit log</span>
   </div>
 
   {% for log in logs %}
@@ -30,7 +30,7 @@
     </div>
     <div>
       <strong>{{ log.event }}</strong>
-      <span>{{ log.created_at|nice_date }} · Initiated by Demo User #{{ log.user_id }}</span>
+      <span>{{ log.created_at|nice_date }} · Initiated by {{ log.actor_name }} · {{ 'Student' if log.actor_role == 'student' else ('Advisor' if log.actor_role == 'advisor' else ('Advising Team' if log.actor_role == 'advising_team' else 'Unknown role')) }}{% if log.actor_student_code %} · {{ log.actor_student_code }}{% endif %}</span>
     </div>
   </div>
   {% else %}

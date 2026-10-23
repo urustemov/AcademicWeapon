@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 apss_demo.sqlite3
 apss_demo.sqlite3-*
+academic_weapon.sqlite3
+academic_weapon.sqlite3-*
 .apss_local_secret
 .env
 .pytest_cache/

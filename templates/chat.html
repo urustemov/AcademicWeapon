@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Chat with ' ~ student.name if is_aac else 'Advisor Chat' }}{% endblock %}
+{% block crumb %}{{ 'Messages / ' ~ student.name if is_aac else 'Advisor Chat' }}{% endblock %}
+{% block content %}
+<a href="{{ back_url }}" class="back-link">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+  <span>{{ back_label }}</span>
+</a>
+
+<div class="page-heading chat-page-heading">
+  <div>
+    <div class="eyebrow dark">PRIVATE ADVISING CHANNEL</div>
+    <h1>{{ student.name if is_aac else 'Your Advising Contacts' }}</h1>
+    <p>{% if is_aac %}This private conversation is visible only to you and the student.{% else %}Choose your personal advisor or an Academic Advising Center team member to start a direct conversation.{% endif %}</p>
+  </div>
+  <span class="chat-secure-label">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+    Private conversation
+  </span>
+</div>
+
+<section class="panel chat-contact-picker">
+  <div class="chat-contact-picker-heading">
+    <div>
+      <span class="section-overline">{{ 'CONVERSATION OWNER' if is_aac else 'WHO WOULD YOU LIKE TO MESSAGE?' }}</span>
+      <h2>{{ 'Your direct conversation' if is_aac else 'Advising contacts' }}</h2>
+    </div>
+    <span class="muted small">{{ contacts|selectattr('available')|list|length }} available</span>
+  </div>
+  <div class="chat-contact-list">
+    {% for contact in contacts %}
+      {% if contact.available %}
+      <a class="chat-contact {{ 'selected' if selected_contact and contact.id==selected_contact.id else '' }}"
+         href="{{ '/aac/student/' ~ student.id ~ '/chat' if is_aac else '/student/chat' }}?contact={{ contact.id }}">
+        <span class="chat-contact-avatar">{{ contact.display_name|initials }}</span>
+        <span class="chat-contact-copy">
+          <strong>{{ contact.display_name }}</strong>
+          <small>{{ 'Personal Advisor' if contact.is_personal else ('Advisor' if contact.role=='advisor' else 'Advising Team') }}</small>
+        </span>
+        {% if contact.is_personal %}<span class="contact-role-badge">Your advisor</span>{% endif %}
+      </a>
+      {% else %}
+      <div class="chat-contact unavailable" title="This advisor’s account will be connected later">
+        <span class="chat-contact-avatar">{{ contact.display_name|initials }}</span>
+        <span class="chat-contact-copy">
+          <strong>{{ contact.display_name }}</strong>
+          <small>Personal Advisor · Coming soon</small>
+        </span>
+        <span class="contact-role-badge muted-badge">Pending</span>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+<div class="chat-layout">
+  <section class="panel chat-panel">
+    <header class="chat-participant">
+      <span class="profile-avatar chat-avatar">{{ student.avatar if is_aac else selected_contact.display_name|initials }}</span>
+      <div>
+        <strong>{{ student.name if is_aac else selected_contact.display_name }}</strong>
+        <span>{% if is_aac %}{{ student.student_code }} · Direct thread with {{ selected_contact.display_name }}{% else %}{{ 'Your Personal Advisor' if selected_contact.is_personal else ('Advisor' if selected_contact.role=='advisor' else 'Academic Advising Team') }}{% endif %}</span>
+      </div>
+      <span class="workspace-dot" title="Account active"></span>
+    </header>
+
+    <div class="chat-thread" data-chat-thread aria-live="polite">
+      {% for message in messages %}
+      {% set own_side = message.sender_user_id == user.id %}
+      <div class="chat-message-row {{ 'own' if own_side else 'other' }}" {% if loop.last %}id="latest"{% endif %}>
+        <div class="chat-message-meta">
+          <span>{{ 'You' if message.sender_user_id == user.id else message.sender_name }}</span>
+          <time datetime="{{ message.created_at }}">{{ message.created_at|nice_datetime }}</time>
+        </div>
+        <div class="chat-bubble">{{ message.body }}</div>
+      </div>
+      {% else %}
+      <div class="chat-empty">
+        <span class="chat-empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>
+        </span>
+        <strong>No messages yet</strong>
+        <p>Start the conversation with a short message.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="{{ chat_action }}" class="chat-composer" data-chat-form>
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <input type="hidden" name="contact" value="{{ selected_contact.id }}">
+      <label for="chatMessage" class="sr-only">Message</label>
+      <textarea id="chatMessage" name="body" rows="2" maxlength="2000" required placeholder="Write a message…" data-chat-input></textarea>
+      <div class="chat-composer-footer">
+        <span><b data-chat-count>0</b>/2000 · Ctrl/⌘ + Enter to send</span>
+        <button type="submit" class="primary-btn">
+          Send message
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <aside class="chat-context-card">
+    <span class="section-overline">CONVERSATION DETAILS</span>
+    {% if is_aac %}
+    <h2>{{ student.name }}</h2>
+    <dl class="chat-facts">
+      <div><dt>Student code</dt><dd>{{ student.student_code }}</dd></div>
+      <div><dt>Department</dt><dd>{{ student.program }}</dd></div>
+      <div><dt>Standing</dt><dd>{{ student.year|year_label }}</dd></div>
+      <div><dt>Assigned advisor</dt><dd>{{ student.advisor }}</dd></div>
+    </dl>
+    <a href="/aac/student/{{ student.id }}" class="secondary-btn chat-context-link">Open student profile</a>
+    {% else %}
+    <h2>{{ selected_contact.display_name }}</h2>
+    <p>Use this direct chat for academic planning, follow-up questions, and help with your recovery plan.</p>
+    <dl class="chat-facts compact">
+      <div><dt>Role</dt><dd>{{ 'Advisor' if selected_contact.role=='advisor' else 'Advising Team' }}</dd></div>
+      {% if selected_contact.is_personal %}<div><dt>Connection</dt><dd>Your assigned advisor</dd></div>{% endif %}
+    </dl>
+    <div class="chat-guidance">
+      <strong>For urgent situations</strong>
+      <span>Contact the university office or emergency services directly. This chat is not monitored continuously.</span>
+    </div>
+    {% endif %}
+    <p class="chat-privacy-note">This direct conversation is visible only to the student and the selected staff contact. Other Advisors and Advising Team members cannot read it.</p>
+  </aside>
+</div>
+{% endblock %}

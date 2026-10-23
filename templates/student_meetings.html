@@ -30,7 +30,7 @@
     </span>
     <div>
       <strong>{{ meeting.topic }}</strong>
-      <p>{{ meeting.date|nice_date }} · Advisor: {{ meeting.advisor }}{% if meeting.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ meeting.notes }}</span>{% endif %}</p>
+      <p>{{ meeting.date|nice_date }}{% if meeting.time %} at {{ meeting.time }}{% endif %} · Advisor: {{ meeting.advisor }}{% if meeting.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ meeting.notes }}</span>{% endif %}</p>
     </div>
     <span class="status {{ 'active-plan' if meeting.date >= today else 'completed' }}">
       {% if meeting.date >= today %}

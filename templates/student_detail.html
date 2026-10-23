@@ -11,17 +11,27 @@
 <div class="profile-heading">
   <span class="profile-avatar">{{ student.avatar }}</span>
   <div class="profile-identity">
-    <div class="eyebrow dark">{{ student.student_code }} · YEAR {{ student.year }}</div>
+    <div class="eyebrow dark">{{ student.student_code }} · {{ student.year|year_label|upper }}</div>
     <h1>{{ student.name }}</h1>
     <span>{{ student.program }}</span>
   </div>
-  <span class="attention {{ student.attention|lower|replace(' ', '-') }}">{{ student.attention }}</span>
+  <div class="profile-heading-actions">
+    <a class="secondary-btn" href="/aac/student/{{ student.id }}/chat">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path></svg>
+      Open Chat
+    </a>
+    <a class="secondary-btn" href="/aac/student/{{ student.id }}/schedule">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      View Schedule
+    </a>
+    <span class="attention {{ student.attention|lower|replace(' ', '-') }}">{{ student.attention }}</span>
+  </div>
 </div>
 
 <!-- Student Core Academic Snapshot -->
 <div class="profile-info">
   <div>
-    <span>Academic GPA (Demo)</span>
+    <span>{% if demo_mode %}Academic GPA (Demo){% else %}Academic CGPA{% endif %}</span>
     <strong style="font-variant-numeric: tabular-nums;">{{ '%.2f'|format(student.gpa) }}</strong>
   </div>
   <div>
@@ -54,7 +64,7 @@
       <form method="post" action="/aac/student/{{ student.id }}/status" class="inline-edit">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
         <select name="status" aria-label="Change support case status">
-          {% for opt in ['Initial Assessment','Active Plan','On Track','Needs Review','Semester Review'] %}
+          {% for opt in case_statuses %}
           <option value="{{ opt }}" {{ 'selected' if opt == student.status else '' }}>{{ opt }}</option>
           {% endfor %}
         </select>
@@ -182,8 +192,22 @@
         </span>
         <div>
           <strong>{{ m.topic }}</strong>
-          <p>{{ m.date|nice_date }} · Advisor: {{ m.advisor }}{% if m.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ m.notes }}</span>{% endif %}</p>
+          <p>{{ m.date|nice_date }}{% if m.time %} at {{ m.time }}{% endif %} · Advisor: {{ m.advisor }}{% if m.notes %}<br><span style="color:var(--text);font-style:italic;">Notes: {{ m.notes }}</span>{% endif %}</p>
         </div>
+        {% if m.can_edit %}
+          <form method="post" action="/aac/student/{{ student.id }}/meeting/{{ m.id }}/time" class="meeting-time-form">
+            <input type="hidden" name="_csrf" value="{{ csrf }}">
+            <label>
+              <span>{{ 'Meeting time' if m.time else 'Time not assigned' }}</span>
+              <input type="time" name="time" value="{{ m.time }}" aria-label="Meeting time for {{ m.topic }}" required>
+            </label>
+            <button class="mini-btn" type="submit">{{ 'Change time' if m.time else 'Assign time' }}</button>
+          </form>
+        {% else %}
+          <span class="status completed">
+            {{ 'Managed by the assigned Advisor' if m.owner_role == 'advisor' else 'Managed by Advising Team' }}
+          </span>
+        {% endif %}
       </div>
       {% else %}
       <div class="empty-state">No advising meetings recorded yet.</div>
@@ -200,12 +224,18 @@
             Meeting Topic
             <input name="topic" required maxlength="140" placeholder="e.g. Midterm recovery review">
           </label>
+          <div class="form-row">
+            <label>
+              Consultation Date
+              <input type="date" name="date" value="{{ today }}" required>
+            </label>
+            <label>
+              Consultation Time
+              <input type="time" name="time" required>
+            </label>
+          </div>
           <label>
-            Consultation Date
-            <input type="date" name="date" value="{{ today }}" required>
-          </label>
-          <label>
-            Advisor Notes (Demo only)
+            Advisor Notes
             <textarea name="notes" maxlength="400" rows="2" placeholder="Summary of discussion and student commitments"></textarea>
           </label>
           <button class="primary-btn" type="submit">Save Meeting Record</button>

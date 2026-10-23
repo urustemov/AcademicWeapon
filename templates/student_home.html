@@ -18,7 +18,7 @@
 <div class="stats-grid three">
   <div class="stat-card">
     <div class="stat-label">
-      <span>Current GPA (Demo)</span>
+      <span>{% if demo_mode %}Current GPA (Demo){% else %}Current CGPA{% endif %}</span>
       <span class="stat-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
       </span>
@@ -141,9 +141,15 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
         </div>
       </div>
-      <p>Take two minutes to reflect on your classes and let your advisor know if you need assistance with coursework or study habits.</p>
-      <a href="/student/checkin" class="primary-btn" style="width: 100%;">
-        <span>Complete Weekly Check-in</span>
+      {% if checkin_state.is_completed %}
+      <p>Your reflection for this week is complete. The next Check-in opens {{ checkin_state.next_open_label }}.</p>
+      {% elif checkin_state.is_open %}
+      <p>The weekly window is open until Sunday at 23:59. Take two minutes to reflect and let your advisor know if you need support.</p>
+      {% else %}
+      <p>Weekly Check-in opens {{ checkin_state.next_open_label }} and remains available through Sunday at 23:59.</p>
+      {% endif %}
+      <a href="/student/checkin" class="{{ 'secondary-btn' if checkin_state.is_completed or not checkin_state.is_open else 'primary-btn' }}" style="width: 100%;">
+        <span>{% if checkin_state.is_completed %}View Completed Check-in{% elif checkin_state.is_open %}Complete Weekly Check-in{% else %}View Check-in Schedule{% endif %}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
       </a>
     </section>
@@ -169,7 +175,7 @@
         </span>
         <div>
           <strong>{{ meeting.topic }}</strong>
-          <span>{{ meeting.advisor }}</span>
+          <span>{% if meeting.time %}{{ meeting.time }} · {% endif %}{{ meeting.advisor }}</span>
         </div>
       </div>
       {% else %}

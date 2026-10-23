@@ -32,14 +32,33 @@
 
     <select name="status" aria-label="Filter by support case status">
       <option value="">All case statuses</option>
-      {% for opt in ['Initial Assessment','Active Plan','On Track','Needs Review','Semester Review'] %}
+      {% for opt in case_statuses %}
       <option value="{{ opt }}" {{ 'selected' if status == opt else '' }}>{{ opt }}</option>
       {% endfor %}
     </select>
 
+    <select name="faculty" aria-label="Filter by department">
+      <option value="">All departments</option>
+      {% for opt in faculties %}
+      <option value="{{ opt }}" {{ 'selected' if faculty == opt else '' }}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="year" aria-label="Filter by academic standing">
+      <option value="">All standings</option>
+      {% for opt in years %}
+      <option value="{{ opt }}" {{ 'selected' if year == opt else '' }}>{{ opt|year_label }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="sort" aria-label="Sort students alphabetically">
+      <option value="az" {{ 'selected' if sort == 'az' else '' }}>Name A–Z</option>
+      <option value="za" {{ 'selected' if sort == 'za' else '' }}>Name Z–A</option>
+    </select>
+
     <button type="submit" class="secondary-btn">Apply filters</button>
 
-    {% if q or status %}
+    {% if q or status or faculty or year or sort != 'az' %}
     <a href="/aac/students" class="text-link">Clear filters</a>
     {% endif %}
   </form>
@@ -50,7 +69,7 @@
         <tr>
           <th>Student</th>
           <th>Program / Cohort</th>
-          <th>Demo GPA</th>
+          <th>{% if demo_mode %}Demo GPA{% else %}CGPA{% endif %}</th>
           <th>Support Status</th>
           <th>Attention Level</th>
           <th style="text-align: right;">Action</th>
@@ -70,7 +89,7 @@
           </td>
           <td>
             <strong>{{ s.program }}</strong>
-            <div class="table-subtext">Year {{ s.year }}</div>
+            <div class="table-subtext">{{ s.year|year_label }}</div>
           </td>
           <td>
             <strong style="font-variant-numeric: tabular-nums;">{{ '%.2f'|format(s.gpa) }}</strong>
@@ -91,7 +110,7 @@
         {% else %}
         <tr>
           <td colspan="6">
-            <div class="empty-state">No students found matching your criteria. Try adjusting your query or status filter.</div>
+            <div class="empty-state">No students found matching your criteria. Try adjusting or clearing the filters.</div>
           </td>
         </tr>
         {% endfor %}
@@ -100,7 +119,11 @@
   </div>
 
   <div class="table-bottom">
+    {% if demo_mode %}
     All student records shown here are synthetic demo data and not connected to AUCA production databases.
+    {% else %}
+    Restricted Academic Probation records. Access is limited to authorized AUCA accounts.
+    {% endif %}
   </div>
 </section>
 {% endblock %}

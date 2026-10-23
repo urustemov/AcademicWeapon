@@ -43,6 +43,58 @@
       </div>
       {% endif %}
 
+      {% if google_client_id %}
+      <div class="google-signin-block">
+        <div id="googleSignInButton" aria-live="polite"></div>
+        <p class="google-access-note">Use the AUCA Google account that appears on the current Academic Probation access list.</p>
+        <p id="googleSignInError" class="google-signin-error" hidden>
+          Google sign-in could not load in this browser. Open this page in Chrome or Safari and reload it.
+        </p>
+        <noscript><p class="google-signin-error">JavaScript is required for Google sign-in.</p></noscript>
+        <script>
+          function showGoogleSignInError() {
+            document.getElementById('googleSignInError').hidden = false;
+          }
+
+          function initializeGoogleSignIn() {
+            const target = document.getElementById('googleSignInButton');
+            try {
+              google.accounts.id.initialize({
+                client_id: {{ google_client_id|tojson }},
+                login_uri: {{ google_login_uri|tojson }},
+                ux_mode: 'redirect',
+                hd: {{ google_workspace_domain|tojson }},
+                auto_select: false
+              });
+              google.accounts.id.renderButton(target, {
+                type: 'standard',
+                shape: 'rectangular',
+                theme: 'outline',
+                text: 'signin_with',
+                size: 'large',
+                logo_alignment: 'left',
+                width: 360
+              });
+              window.setTimeout(function () {
+                if (!target.querySelector('iframe')) showGoogleSignInError();
+              }, 3000);
+            } catch (error) {
+              showGoogleSignInError();
+            }
+          }
+        </script>
+        <script src="https://accounts.google.com/gsi/client" async defer
+                onload="initializeGoogleSignIn()" onerror="showGoogleSignInError()"></script>
+      </div>
+      {% else %}
+      <div class="google-setup-note">
+        <strong>Google sign-in is ready for setup.</strong>
+        <span>Add the Google Web Client ID to the local <code>.env</code> file to enable it.</span>
+      </div>
+      {% endif %}
+
+      {% if demo_mode %}
+      <div class="signin-divider"><span>or use a local demo account</span></div>
       <form action="/login" method="post" class="form-stack" id="loginForm">
         <label>
           Email address
@@ -84,10 +136,15 @@
           </button>
         </div>
       </div>
+      {% endif %}
 
       <div class="login-disclaimer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        <span><strong>Local prototype.</strong> All student records and accounts are synthetic and intended strictly for demonstrational purposes. Do not enter confidential university records.</span>
+        {% if demo_mode %}
+        <span><strong>Local prototype.</strong> Demo accounts use synthetic records. Real student records must stay in the separate protected database.</span>
+        {% else %}
+        <span><strong>Restricted access.</strong> Sign in only with your AUCA account. Student access is limited to the matching personal record.</span>
+        {% endif %}
       </div>
     </div>
   </div>

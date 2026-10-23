@@ -1,26 +1,70 @@
-"""Academic Weapon local-only demonstration web app. No production/student data allowed."""
+"""Academic Weapon FastAPI application."""
 from __future__ import annotations
 import os
 from pathlib import Path
 import secrets
-from datetime import date, datetime
+import logging
+import sqlite3
+from datetime import date, datetime, time, timedelta
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from itsdangerous import URLSafeSerializer, BadSignature
+from itsdangerous import URLSafeTimedSerializer, BadSignature
 
-from db import BASE_DIR, seed_database, one, all_rows, run, password_verify
+
+BASE_PATH = Path(__file__).resolve().parent
+auth_logger = logging.getLogger('academic_weapon.auth')
+
+
+def load_local_env():
+    """Load simple KEY=VALUE settings without adding another dependency."""
+    env_path = BASE_PATH / '.env'
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+load_local_env()
+
+from db import BASE_DIR, DB_PATH, DEMO_MODE, seed_database, one, all_rows, run, password_verify
+
+try:
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+except ImportError:  # The login page explains that dependencies still need setup.
+    google_requests = None
+    google_id_token = None
 
 seed_database()
 secret_path = BASE_DIR / '.apss_local_secret'
 if not secret_path.exists():
     secret_path.write_text(secrets.token_urlsafe(48), encoding='utf-8')
-signer = URLSafeSerializer(secret_path.read_text(encoding='utf-8'), salt='apss-local-demo-session')
+signer = URLSafeTimedSerializer(
+    secret_path.read_text(encoding='utf-8'),
+    # Binding sessions to the selected database prevents a user ID from one
+    # environment being reused after switching between demo and real data.
+    salt=f'academic-weapon-session:{DB_PATH.resolve()}',
+)
 
-app = FastAPI(title='Academic Weapon · AUCA Demo', docs_url=None, redoc_url=None)
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '').strip()
+GOOGLE_WORKSPACE_DOMAIN = os.getenv('GOOGLE_WORKSPACE_DOMAIN', 'auca.kg').strip().lower()
+SESSION_TTL_SECONDS = int(os.getenv('SESSION_TTL_SECONDS', str(60 * 60 * 12)))
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+ACADEMIC_TIMEZONE = ZoneInfo(os.getenv('ACADEMIC_TIMEZONE', 'Asia/Bishkek'))
+
+app = FastAPI(title='Academic Weapon · AUCA', docs_url=None, redoc_url=None)
 app.mount('/static', StaticFiles(directory=BASE_DIR / 'static'), name='static')
 templates = Jinja2Templates(directory=BASE_DIR / 'templates')
 
@@ -32,11 +76,149 @@ def nice_date(value):
         return value or '—'
 
 
+def nice_datetime(value):
+    try:
+        return datetime.fromisoformat(value).strftime('%b %d, %Y · %H:%M')
+    except (TypeError, ValueError):
+        return value or '—'
+
+
 def initials(value):
     return ''.join(part[:1] for part in value.split()[:2]).upper()
 
+
+YEAR_LABELS = {
+    1: 'Freshman',
+    2: 'Sophomore',
+    3: 'Junior',
+    4: 'Senior',
+}
+
+WEEKDAYS = (
+    ('Mon', 'Monday'),
+    ('Tue', 'Tuesday'),
+    ('Wed', 'Wednesday'),
+    ('Thu', 'Thursday'),
+    ('Fri', 'Friday'),
+    ('Sat', 'Saturday'),
+    ('Sun', 'Sunday'),
+)
+
+COURSE_SLOTS = (
+    ('08:00-09:15', '08:00', '09:15', '8:00–9:15'),
+    ('09:25-10:40', '09:25', '10:40', '9:25–10:40'),
+    ('10:50-12:05', '10:50', '12:05', '10:50–12:05'),
+    ('12:45-14:00', '12:45', '14:00', '12:45–14:00'),
+    ('14:10-15:25', '14:10', '15:25', '14:10–15:25'),
+    ('15:35-17:00', '15:35', '17:00', '15:35–17:00'),
+)
+
+STAFF_ROLES = {'advisor', 'advising_team'}
+CASE_STATUSES = ('Initial Assessment', 'On Track', 'Needs Review')
+
+
+def academic_now():
+    """Current university-local time; separated for predictable tests."""
+    return datetime.now(ACADEMIC_TIMEZONE)
+
+
+def weekly_checkin_state(student_id, now=None):
+    """Return the active Monday-based check-in window for a student."""
+    now = now or academic_now()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=ACADEMIC_TIMEZONE)
+    else:
+        now = now.astimezone(ACADEMIC_TIMEZONE)
+    monday = now.date() - timedelta(days=now.weekday())
+    opens_at = datetime.combine(monday + timedelta(days=4), time(17, 0), ACADEMIC_TIMEZONE)
+    closes_at = datetime.combine(monday + timedelta(days=6), time(23, 59, 59, 999999), ACADEMIC_TIMEZONE)
+    week_key = monday.isoformat()
+    submission = one(
+        'SELECT * FROM checkins WHERE student_id=? AND week_key=? ORDER BY id DESC LIMIT 1',
+        (student_id, week_key),
+    )
+    if submission:
+        status = 'completed'
+    elif opens_at <= now <= closes_at:
+        status = 'open'
+    else:
+        status = 'closed'
+    next_opens_at = (
+        opens_at + timedelta(days=7)
+        if submission
+        else (opens_at if now < opens_at else opens_at + timedelta(days=7))
+    )
+    return {
+        'status': status,
+        'is_open': status == 'open',
+        'is_completed': status == 'completed',
+        'week_key': week_key,
+        'submission': submission,
+        'opens_at': opens_at,
+        'closes_at': closes_at,
+        'next_opens_at': next_opens_at,
+        'window_label': (
+            f"Friday {opens_at.strftime('%b %d')} at 17:00 – "
+            f"Sunday {closes_at.strftime('%b %d')} at 23:59"
+        ),
+        'next_open_label': next_opens_at.strftime('%A, %b %d at %H:%M'),
+    }
+
+
+def create_student_notification(student_id, kind, title, body, link='/student'):
+    return run(
+        'INSERT INTO notifications(student_id,kind,title,body,link,created_at) VALUES (?,?,?,?,?,?)',
+        (student_id, kind, title[:120], body[:300], link, academic_now().isoformat(timespec='seconds')),
+    )
+
+
+def student_notification_context(student_id, now=None):
+    rows = all_rows(
+        'SELECT * FROM notifications WHERE student_id=? ORDER BY id DESC LIMIT 8',
+        (student_id,),
+    )
+    notifications = [
+        {
+            **item,
+            'is_unread': not item['read_at'],
+            'open_link': f"/student/notification/{item['id']}",
+        }
+        for item in rows
+    ]
+    state = weekly_checkin_state(student_id, now)
+    reminder_active = state['is_open'] and not state['is_completed']
+    if reminder_active:
+        notifications.insert(0, {
+            'id': None,
+            'kind': 'checkin',
+            'title': 'Weekly Check-in reminder',
+            'body': 'Complete this week’s reflection before Sunday at 23:59.',
+            'created_at': '',
+            'read_at': None,
+            'is_unread': True,
+            'open_link': '/student/checkin',
+        })
+    unread_persisted = one(
+        'SELECT COUNT(*) AS total FROM notifications WHERE student_id=? AND read_at IS NULL',
+        (student_id,),
+    )
+    persisted_count = unread_persisted['total'] if unread_persisted else 0
+    return notifications, persisted_count + int(reminder_active), persisted_count
+
+
+def year_label(value):
+    """Return the student-facing academic standing for a numeric year."""
+    try:
+        return YEAR_LABELS.get(int(value), str(value))
+    except (TypeError, ValueError):
+        return value or '—'
+
+
 templates.env.filters['nice_date'] = nice_date
+templates.env.filters['nice_datetime'] = nice_datetime
 templates.env.filters['initials'] = initials
+templates.env.filters['year_label'] = year_label
+templates.env.globals['case_statuses'] = CASE_STATUSES
 
 
 def current_session(request):
@@ -44,11 +226,11 @@ def current_session(request):
     if not cookie:
         return None
     try:
-        payload = signer.loads(cookie)
+        payload = signer.loads(cookie, max_age=SESSION_TTL_SECONDS)
         if not isinstance(payload, dict) or 'uid' not in payload:
             return None
-        user = one('SELECT id,email,display_name,role,student_id FROM users WHERE id=?', (payload['uid'],))
-        if user:
+        user = one('SELECT id,email,display_name,role,student_id,active FROM users WHERE id=?', (payload['uid'],))
+        if user and user['active']:
             return {'user':user,'csrf':payload.get('csrf','')}
     except BadSignature:
         return None
@@ -60,8 +242,53 @@ def gate(request, role=None):
     if not session:
         return None
     if role and session['user']['role'] != role:
-        raise HTTPException(403,'This demo account cannot access that page.')
+        raise HTTPException(403,'This account cannot access that page.')
     return session
+
+
+def gate_staff(request):
+    session = gate(request)
+    if not session:
+        return None
+    if session['user']['role'] not in STAFF_ROLES:
+        raise HTTPException(403,'This account cannot access that page.')
+    return session
+
+
+def allowed_student(student_id, session):
+    student = one('SELECT * FROM students WHERE id=? AND active=1',(student_id,))
+    if not student:
+        raise HTTPException(404,'Student not found')
+    if (
+        session['user']['role'] == 'advisor'
+        and student['advisor'].strip().casefold() != session['user']['display_name'].strip().casefold()
+    ):
+        raise HTTPException(403,'Advisors can access only their assigned advisees.')
+    return student
+
+
+def can_edit_meeting(meeting, user):
+    """Return whether this staff user owns the meeting's edit scope."""
+    if meeting.get('owner_role') == 'advisor':
+        return user['role'] == 'advisor' and meeting.get('created_by_user_id') == user['id']
+    return user['role'] == 'advising_team'
+
+
+def require_meeting_editor(meeting, user):
+    if not can_edit_meeting(meeting, user):
+        if meeting.get('owner_role') == 'advisor':
+            detail = 'Only the Advisor who scheduled this meeting can edit it.'
+        else:
+            detail = 'Only Advising Team members can edit this meeting.'
+        raise HTTPException(403, detail)
+
+
+def staff_student_filter(session, table_alias=''):
+    """SQL suffix and params limiting an Advisor to assigned advisees."""
+    if session['user']['role'] == 'advising_team':
+        return '', []
+    prefix = f'{table_alias}.' if table_alias else ''
+    return f' AND LOWER({prefix}advisor)=LOWER(?)', [session['user']['display_name']]
 
 
 def verify_csrf(request, session, form):
@@ -72,9 +299,51 @@ def verify_csrf(request, session, form):
 def page(request, template, **data):
     session = current_session(request)
     user = session['user'] if session else None
+    unread_chat_count = 0
+    notifications = []
+    unread_notification_count = 0
+    unread_persisted_notification_count = 0
+    if user and user['role'] == 'student' and user['student_id']:
+        unread = one(
+            'SELECT COUNT(*) AS total FROM chat_messages WHERE student_id=? AND read_by_student=0',
+            (user['student_id'],),
+        )
+        unread_chat_count = unread['total'] if unread else 0
+        notifications, unread_notification_count, unread_persisted_notification_count = student_notification_context(user['student_id'])
+    elif user and user['role'] in STAFF_ROLES:
+        if user['role'] == 'advising_team':
+            unread = one(
+                '''SELECT COUNT(*) AS total FROM chat_messages
+                   WHERE read_by_aac=0 AND staff_user_id=?''',
+                (user['id'],),
+            )
+        else:
+            unread = one(
+                '''SELECT COUNT(*) AS total FROM chat_messages m
+                   JOIN students s ON s.id=m.student_id
+                   WHERE m.read_by_aac=0 AND m.staff_user_id=?
+                     AND LOWER(s.advisor)=LOWER(?)''',
+                (user['id'],user['display_name']),
+            )
+        unread_chat_count = unread['total'] if unread else 0
+        internal_unread = one(
+            '''SELECT COUNT(*) AS total FROM staff_messages
+               WHERE recipient_user_id=? AND read_at IS NULL''',
+            (user['id'],),
+        )
+        unread_chat_count += internal_unread['total'] if internal_unread else 0
     return templates.TemplateResponse(request=request,name=template,context={
         'user':user, 'csrf':session['csrf'] if session else '',
-        'today':date.today().isoformat(), 'active':data.pop('active',''), **data
+        'today':academic_now().date().isoformat(), 'active':data.pop('active',''),
+        'google_client_id':GOOGLE_CLIENT_ID,
+        'google_login_uri':str(request.url_for('google_login')) if GOOGLE_CLIENT_ID else '',
+        'google_workspace_domain':GOOGLE_WORKSPACE_DOMAIN,
+        'demo_mode':DEMO_MODE,
+        'unread_chat_count':unread_chat_count,
+        'notifications':notifications,
+        'unread_notification_count':unread_notification_count,
+        'unread_persisted_notification_count':unread_persisted_notification_count,
+        **data
     })
 
 
@@ -86,16 +355,70 @@ def record(uid,event):
     run('INSERT INTO audit_logs(user_id,event) VALUES (?,?)',(uid,event))
 
 
+def activity_rows(user, limit=50):
+    """Return the audit scope allowed for the current staff role."""
+    select_sql = '''SELECT a.*,COALESCE(u.display_name,'Unknown user') AS actor_name,
+                           COALESCE(u.role,'unknown') AS actor_role,
+                           s.student_code AS actor_student_code
+                    FROM audit_logs a
+                    LEFT JOIN users u ON u.id=a.user_id
+                    LEFT JOIN students s ON s.id=u.student_id'''
+    if user['role'] == 'advising_team':
+        return all_rows(select_sql+' ORDER BY a.id DESC LIMIT ?',(limit,))
+    return all_rows(
+        select_sql+'''
+          WHERE a.user_id=?
+             OR (u.role='student' AND s.active=1 AND LOWER(s.advisor)=LOWER(?))
+          ORDER BY a.id DESC LIMIT ?''',
+        (user['id'],user['display_name'],limit),
+    )
+
+
+def refresh_credit_load(student_id):
+    """Keep the student credit load equal to the sum of scheduled courses."""
+    total=one('SELECT COALESCE(SUM(credits),0) AS total FROM schedule_courses WHERE student_id=?',(student_id,))
+    run('UPDATE students SET credit_load=? WHERE id=?',(total['total'],student_id))
+
+
+def issue_session(user):
+    token=signer.dumps({'uid':user['id'],'csrf':secrets.token_urlsafe(24)})
+    response=bounce('/student' if user['role']=='student' else '/aac')
+    response.set_cookie(
+        'apss_demo_session', token, max_age=SESSION_TTL_SECONDS,
+        httponly=True, samesite='lax', secure=SESSION_COOKIE_SECURE, path='/'
+    )
+    return response
+
+
+def verify_google_credential(credential: str):
+    if not GOOGLE_CLIENT_ID:
+        raise RuntimeError('Google sign-in is not configured.')
+    if google_id_token is None or google_requests is None:
+        raise RuntimeError('Google authentication dependency is not installed.')
+    return google_id_token.verify_oauth2_token(
+        credential,
+        google_requests.Request(),
+        GOOGLE_CLIENT_ID,
+    )
+
+
 @app.get('/')
 def index(request:Request):
     session=gate(request)
-    return bounce('/aac' if session['user']['role']=='aac' else '/student') if session else bounce('/login')
+    return bounce('/student' if session['user']['role']=='student' else '/aac') if session else bounce('/login')
 
 
 @app.get('/login')
 def login_page(request:Request):
     if gate(request):return bounce('/')
-    return page(request,'login.html')
+    error_codes = {
+        'google_unavailable': 'Google sign-in is not configured yet.',
+        'google_invalid': 'Google could not verify this sign-in. Please try again.',
+        'wrong_domain': f'Use your {GOOGLE_WORKSPACE_DOMAIN} Google account.',
+        'not_enrolled': 'This email is not on the current Academic Probation access list.',
+        'inactive': 'This account is not active. Please contact the AAC.',
+    }
+    return page(request,'login.html',error=error_codes.get(request.query_params.get('error','')))
 
 
 @app.post('/login')
@@ -107,11 +430,64 @@ async def login_action(request:Request):
     if not user or not password_verify(password,user['password_hash']):
         return templates.TemplateResponse(request=request,name='login.html',context={
             'user':None,'active':'','csrf':'','today':date.today().isoformat(),
-            'error':'Email or password is incorrect. Use one of the demo accounts.'},status_code=401)
-    token=signer.dumps({'uid':user['id'],'csrf':secrets.token_urlsafe(24)})
-    response=bounce('/aac' if user['role']=='aac' else '/student')
-    response.set_cookie('apss_demo_session',token,max_age=60*60*12,httponly=True,samesite='lax',secure=False,path='/')
-    return response
+            'google_client_id':GOOGLE_CLIENT_ID,
+            'google_login_uri':str(request.url_for('google_login')) if GOOGLE_CLIENT_ID else '',
+            'google_workspace_domain':GOOGLE_WORKSPACE_DOMAIN,
+            'demo_mode':DEMO_MODE,
+            'error':'Email or password is incorrect.'},status_code=401)
+    if not user.get('active', 1):
+        return bounce('/login?error=inactive')
+    return issue_session(user)
+
+
+@app.post('/auth/google', name='google_login')
+async def google_login(request:Request):
+    if not GOOGLE_CLIENT_ID:
+        return bounce('/login?error=google_unavailable')
+    form=await request.form()
+    csrf_form=str(form.get('g_csrf_token',''))
+    csrf_cookie=str(request.cookies.get('g_csrf_token',''))
+    if not csrf_form or not csrf_cookie or not secrets.compare_digest(csrf_form,csrf_cookie):
+        raise HTTPException(400,'Invalid Google sign-in verification token.')
+    credential=str(form.get('credential',''))
+    try:
+        identity=verify_google_credential(credential)
+    except (ValueError, RuntimeError) as error:
+        # Never log the credential itself. The exception contains only the
+        # verification reason (expiry, audience, certificate, and so on).
+        auth_logger.warning(
+            'Google credential verification failed: %s: %s',
+            type(error).__name__,
+            error,
+        )
+        return bounce('/login?error=google_invalid')
+
+    hosted_domain=str(identity.get('hd','')).strip().lower()
+    email=str(identity.get('email','')).strip().lower()
+    google_sub=str(identity.get('sub','')).strip()
+    if hosted_domain != GOOGLE_WORKSPACE_DOMAIN or not identity.get('email_verified'):
+        return bounce('/login?error=wrong_domain')
+    if not email or not google_sub:
+        return bounce('/login?error=google_invalid')
+
+    user=one('SELECT * FROM users WHERE LOWER(email)=?',(email,))
+    if not user:
+        return bounce('/login?error=not_enrolled')
+    if not user['active']:
+        return bounce('/login?error=inactive')
+    if user['role']=='student':
+        student=one('SELECT id,active FROM students WHERE id=?',(user['student_id'],))
+        if not student or not student['active']:
+            return bounce('/login?error=inactive')
+    linked_user=one('SELECT id FROM users WHERE google_sub=?',(google_sub,))
+    if linked_user and linked_user['id']!=user['id']:
+        return bounce('/login?error=google_invalid')
+    if user.get('google_sub') and not secrets.compare_digest(user['google_sub'],google_sub):
+        return bounce('/login?error=google_invalid')
+    if not user.get('google_sub'):
+        run('UPDATE users SET google_sub=? WHERE id=?',(google_sub,user['id']))
+    record(user['id'],'Signed in with Google Workspace')
+    return issue_session(user)
 
 
 @app.post('/logout')
@@ -134,7 +510,7 @@ def student_home(request:Request):
     tasks=all_rows('SELECT * FROM tasks WHERE student_id=? ORDER BY CASE WHEN status="Completed" THEN 1 ELSE 0 END,due_date',(sid,))
     meetings=all_rows('SELECT * FROM meetings WHERE student_id=? AND date>=? ORDER BY date LIMIT 3',(sid,date.today().isoformat()))
     completed=sum(1 for x in tasks if x['status']=='Completed')
-    return page(request,'student_home.html',active='student_home',student=student,goals=goals,tasks=tasks[:5],meetings=meetings,completed=completed,total=len(tasks),pct=round(completed/max(len(tasks),1)*100))
+    return page(request,'student_home.html',active='student_home',student=student,goals=goals,tasks=tasks[:5],meetings=meetings,completed=completed,total=len(tasks),pct=round(completed/max(len(tasks),1)*100),checkin_state=weekly_checkin_state(sid))
 
 
 @app.get('/student/plan')
@@ -149,6 +525,355 @@ def student_plan(request:Request):
     return page(request,'plan.html',active='student_plan',student=student,goals=goals,tasks=tasks,completed=completed,pct=round(completed/max(len(tasks),1)*100),is_aac=False)
 
 
+def build_schedule_context(student_id:int,raw_week:str=''):
+    """Build the shared weekly timetable used by students and AAC staff."""
+    try:selected_day=date.fromisoformat(raw_week) if raw_week else date.today()
+    except ValueError:selected_day=date.today()
+    week_start=selected_day-timedelta(days=selected_day.weekday())
+    week_end=week_start+timedelta(days=6)
+    student=one('SELECT * FROM students WHERE id=?',(student_id,))
+    if not student:raise HTTPException(404,'Student not found')
+    courses=all_rows('SELECT * FROM schedule_courses WHERE student_id=? ORDER BY start_time,name COLLATE NOCASE',(student_id,))
+    meetings=all_rows(
+        'SELECT * FROM meetings WHERE student_id=? AND date BETWEEN ? AND ? ORDER BY date,time,topic COLLATE NOCASE',
+        (student_id,week_start.isoformat(),week_end.isoformat()),
+    )
+    days=[]
+    for offset,(code,label) in enumerate(WEEKDAYS):
+        calendar_day=week_start+timedelta(days=offset)
+        days.append({
+            'code':code,'label':label,'date':calendar_day.isoformat(),
+            'date_label':calendar_day.strftime('%b %d'),'is_today':calendar_day==date.today(),
+            'entries':[],
+        })
+    day_by_code={day['code']:day for day in days}
+
+    def time_minutes(value):
+        try:
+            hour,minute=value.split(':',1)
+            return int(hour)*60+int(minute)
+        except (AttributeError,TypeError,ValueError):
+            return 24*60+1
+
+    schedule_rows=[]
+    rows_by_key={}
+    for slot_id,start_time,end_time,label in COURSE_SLOTS:
+        row={
+            'key':slot_id,'label':label,'kind':'fixed','sort_order':time_minutes(start_time),
+            'cells':{code:[] for code,_ in WEEKDAYS},
+        }
+        schedule_rows.append(row)
+        rows_by_key[slot_id]=row
+
+    def custom_row(key,label,sort_order,kind='custom'):
+        if key not in rows_by_key:
+            row={
+                'key':key,'label':label,'kind':kind,'sort_order':sort_order,
+                'cells':{code:[] for code,_ in WEEKDAYS},
+            }
+            schedule_rows.append(row)
+            rows_by_key[key]=row
+        return rows_by_key[key]
+
+    for course in courses:
+        entry={'kind':'course',**course,'sort_time':course['start_time']}
+        exact_slot=next(
+            (slot for slot in COURSE_SLOTS if slot[1]==course['start_time'] and slot[2]==course['end_time']),
+            None,
+        )
+        if exact_slot:
+            row=rows_by_key[exact_slot[0]]
+        else:
+            row=custom_row(
+                f"course-{course['start_time']}-{course['end_time']}",
+                f"{course['start_time']}–{course['end_time']}",
+                time_minutes(course['start_time']),
+            )
+        for code in course['days'].split(','):
+            if code in day_by_code:
+                day_by_code[code]['entries'].append(entry)
+                row['cells'][code].append(entry)
+
+    for meeting in meetings:
+        try:day_offset=(date.fromisoformat(meeting['date'])-week_start).days
+        except ValueError:continue
+        if not 0<=day_offset<len(days):continue
+        code=days[day_offset]['code']
+        entry={'kind':'meeting',**meeting,'sort_time':meeting['time'] or '99:99'}
+        day_by_code[code]['entries'].append(entry)
+        if not meeting['time']:
+            row=custom_row('unscheduled','Time not set',24*60+1,'unscheduled')
+        else:
+            containing_slot=next(
+                (slot for slot in COURSE_SLOTS if slot[1]<=meeting['time']<slot[2]),
+                None,
+            )
+            if containing_slot:
+                row=rows_by_key[containing_slot[0]]
+            else:
+                row=custom_row(
+                    f"meeting-{meeting['time']}",meeting['time'],time_minutes(meeting['time'])
+                )
+        row['cells'][code].append(entry)
+
+    for day in days:
+        day['entries'].sort(key=lambda item:(item['sort_time'],0 if item['kind']=='meeting' else 1))
+    for row in schedule_rows:
+        for entries in row['cells'].values():
+            entries.sort(key=lambda item:(item['sort_time'],0 if item['kind']=='meeting' else 1))
+    schedule_rows.sort(key=lambda row:(row['sort_order'],0 if row['kind']=='fixed' else 1,row['label']))
+    return dict(
+        student=student,courses=courses,days=days,weekdays=WEEKDAYS,course_slots=COURSE_SLOTS,
+        schedule_rows=schedule_rows,week_start=week_start.isoformat(),
+        week_end=week_end.isoformat(),
+        week_title=f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}",
+        previous_week=(week_start-timedelta(days=7)).isoformat(),
+        next_week=(week_start+timedelta(days=7)).isoformat(),
+        current_week=(date.today()-timedelta(days=date.today().weekday())).isoformat(),
+    )
+
+
+@app.get('/student/schedule')
+def student_schedule(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    context=build_schedule_context(
+        session['user']['student_id'],request.query_params.get('week','')
+    )
+    return page(
+        request,'schedule.html',active='student_schedule',schedule_readonly=False,
+        schedule_url='/student/schedule',profile_url='',**context,
+    )
+
+
+def chat_contacts(student):
+    """Available people a student may contact, with their personal advisor first."""
+    staff = all_rows(
+        '''SELECT id,email,display_name,role FROM users
+           WHERE active=1 AND role IN ('advisor','advising_team')
+           ORDER BY display_name COLLATE NOCASE'''
+    )
+    advisor_name = student['advisor'].strip()
+    team_order = {
+        'kydyrgychova_u@auca.kg': 0,
+        'tynyeva_a@auca.kg': 1,
+        'zhakypov_a@auca.kg': 2,
+        'urustemov_s@auca.kg': 3,
+    }
+    contacts = []
+    advisor_found = False
+    for person in staff:
+        is_personal = person['display_name'].strip().casefold() == advisor_name.casefold()
+        if person['role'] == 'advisor' and not is_personal:
+            continue
+        advisor_found = advisor_found or is_personal
+        contacts.append({**person,'available':True,'is_personal':is_personal})
+    contacts.sort(key=lambda item:(
+        not item['is_personal'],
+        item['role']!='advisor',
+        team_order.get(item['email'].casefold(),99),
+        item['display_name'].casefold(),
+    ))
+    if advisor_name and advisor_name.casefold() != 'aac advising team' and not advisor_found:
+        contacts.insert(0,{
+            'id':None,'email':'','display_name':advisor_name,'role':'advisor',
+            'available':False,'is_personal':True,
+        })
+    return contacts
+
+
+def select_chat_contact(contacts, requested_id=None, preferred_id=None):
+    available = [contact for contact in contacts if contact['available']]
+    try:
+        requested_id = int(requested_id) if requested_id not in (None,'') else None
+    except (TypeError,ValueError):
+        requested_id = None
+    for contact in available:
+        if contact['id'] == requested_id:
+            return contact
+    for contact in available:
+        if contact['id'] == preferred_id:
+            return contact
+    return available[0] if available else None
+
+
+def staff_chat_contact(student, user, requested_id=None):
+    """Return only this staff member's private thread for the student."""
+    own_contact = next(
+        (
+            contact for contact in chat_contacts(student)
+            if contact['available'] and contact['id'] == user['id']
+        ),
+        None,
+    )
+    if not own_contact:
+        raise HTTPException(403,'You do not have a private chat channel with this student.')
+    if requested_id not in (None,''):
+        try:
+            requested_id = int(requested_id)
+        except (TypeError,ValueError):
+            raise HTTPException(403,'You cannot access another staff member’s conversation.')
+        if requested_id != user['id']:
+            raise HTTPException(403,'You cannot access another staff member’s conversation.')
+    return own_contact
+
+
+def chat_thread(student_id:int, staff_user_id:int):
+    return all_rows('''
+        SELECT m.*,u.display_name AS sender_name,u.role AS sender_role
+        FROM chat_messages m
+        JOIN users u ON u.id=m.sender_user_id
+        WHERE m.student_id=? AND m.staff_user_id=?
+        ORDER BY m.id
+    ''',(student_id,staff_user_id))
+
+
+def internal_staff_peer(user, peer_id):
+    try:
+        peer_id = int(peer_id)
+    except (TypeError,ValueError):
+        raise HTTPException(404,'Staff contact not found.')
+    peer = one(
+        '''SELECT id,email,display_name,role FROM users
+           WHERE id=? AND active=1 AND role IN ('advisor','advising_team')''',
+        (peer_id,),
+    )
+    allowed_pair = peer and {
+        user['role'],peer['role']
+    } == {'advisor','advising_team'}
+    if not allowed_pair:
+        raise HTTPException(403,'Internal chat is available only between Advising Team and Advisors.')
+    return peer
+
+
+def internal_staff_contacts(user):
+    target_role = 'advisor' if user['role'] == 'advising_team' else 'advising_team'
+    contacts = all_rows(
+        '''SELECT id,email,display_name,role FROM users
+           WHERE active=1 AND role=? ORDER BY display_name COLLATE NOCASE''',
+        (target_role,),
+    )
+    for contact in contacts:
+        last = one(
+            '''SELECT body,created_at FROM staff_messages
+               WHERE (sender_user_id=? AND recipient_user_id=?)
+                  OR (sender_user_id=? AND recipient_user_id=?)
+               ORDER BY id DESC LIMIT 1''',
+            (user['id'],contact['id'],contact['id'],user['id']),
+        )
+        unread = one(
+            '''SELECT COUNT(*) AS total FROM staff_messages
+               WHERE sender_user_id=? AND recipient_user_id=? AND read_at IS NULL''',
+            (contact['id'],user['id']),
+        )
+        contact['last_message'] = last['body'] if last else ''
+        contact['last_message_at'] = last['created_at'] if last else ''
+        contact['unread_count'] = unread['total'] if unread else 0
+    contacts.sort(key=lambda contact:(
+        not bool(contact['unread_count']),
+        not bool(contact['last_message_at']),
+        contact['display_name'].casefold(),
+    ))
+    return contacts
+
+
+@app.get('/student/chat')
+def student_chat(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    sid=session['user']['student_id']
+    student=one('SELECT * FROM students WHERE id=? AND active=1',(sid,))
+    if not student:raise HTTPException(404,'Student not found')
+    contacts=chat_contacts(student)
+    selected_contact=select_chat_contact(contacts,request.query_params.get('contact'))
+    if not selected_contact:raise HTTPException(503,'No advising contacts are available yet.')
+    run(
+        '''UPDATE chat_messages SET read_by_student=1
+           WHERE student_id=? AND staff_user_id=? AND read_by_student=0''',
+        (sid,selected_contact['id']),
+    )
+    return page(
+        request,'chat.html',active='student_chat',student=student,
+        messages=chat_thread(sid,selected_contact['id']),contacts=contacts,selected_contact=selected_contact,
+        chat_action='/student/chat',back_url='/student',back_label='Back to Dashboard',is_aac=False,
+    )
+
+
+@app.post('/student/chat')
+async def student_send_chat(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    student=one('SELECT * FROM students WHERE id=? AND active=1',(sid,))
+    if not student:raise HTTPException(404,'Student not found')
+    contacts=chat_contacts(student)
+    selected_contact=select_chat_contact(contacts,form.get('contact'))
+    if not selected_contact:raise HTTPException(400,'Choose an available advising contact.')
+    body=str(form.get('body','')).strip()
+    if not body:raise HTTPException(400,'Message cannot be empty')
+    if len(body)>2000:raise HTTPException(400,'Message is too long')
+    run(
+        '''INSERT INTO chat_messages
+           (student_id,staff_user_id,sender_user_id,body,created_at,read_by_student,read_by_aac)
+           VALUES (?,?,?,?,?,1,0)''',
+        (sid,selected_contact['id'],session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
+    )
+    record(session['user']['id'],f'Sent a chat message to {selected_contact["display_name"]}')
+    return bounce(f'/student/chat?contact={selected_contact["id"]}#latest')
+
+
+@app.post('/student/schedule/course')
+async def student_add_schedule_course(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    name=str(form.get('name','')).strip()[:120]
+    room=str(form.get('room','')).strip()[:60]
+    instructor=str(form.get('instructor','')).strip()[:100]
+    slot_id=str(form.get('time_slot','')).strip()
+    slot=next((slot for slot in COURSE_SLOTS if slot[0]==slot_id),None)
+    selected_days=set(form.getlist('days'))
+    days=[code for code,_ in WEEKDAYS if code in selected_days]
+    try:
+        credits=int(str(form.get('credits','')).strip())
+    except (TypeError,ValueError):
+        raise HTTPException(400,'Enter valid course credits.')
+    if not name or not room or not instructor or not days or not slot:
+        raise HTTPException(400,'Complete all course fields and select at least one day.')
+    if not 1<=credits<=12:
+        raise HTTPException(400,'Credits must be between 1 and 12.')
+    _,start_time,end_time,_=slot
+    run(
+        'INSERT INTO schedule_courses(student_id,name,credits,room,instructor,days,start_time,end_time) VALUES (?,?,?,?,?,?,?,?)',
+        (sid,name,credits,room,instructor,','.join(days),start_time,end_time),
+    )
+    refresh_credit_load(sid)
+    record(session['user']['id'],f'Added course to schedule: {name}')
+    week=str(form.get('week','')).strip()
+    try:week=date.fromisoformat(week).isoformat() if week else ''
+    except ValueError:week=''
+    return bounce('/student/schedule'+(f'?week={week}' if week else ''))
+
+
+@app.post('/student/schedule/course/{course_id}/delete')
+async def student_delete_schedule_course(course_id:int,request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    course=one('SELECT * FROM schedule_courses WHERE id=? AND student_id=?',(course_id,sid))
+    if not course:raise HTTPException(404,'Course not found')
+    run('DELETE FROM schedule_courses WHERE id=?',(course_id,))
+    refresh_credit_load(sid)
+    record(session['user']['id'],f'Removed course from schedule: {course["name"]}')
+    week=str(form.get('week','')).strip()
+    try:week=date.fromisoformat(week).isoformat() if week else ''
+    except ValueError:week=''
+    return bounce('/student/schedule'+(f'?week={week}' if week else ''))
+
+
 @app.post('/student/task/{task_id}/status')
 async def student_task_status(task_id:int, request:Request):
     session=gate(request,'student')
@@ -158,7 +883,7 @@ async def student_task_status(task_id:int, request:Request):
     if not task:raise HTTPException(404)
     status='Completed' if task['status']!='Completed' else 'To Do'
     run('UPDATE tasks SET status=? WHERE id=?',(status,task_id))
-    record(session['user']['id'],f'Student task #{task_id} status to {status}')
+    record(session['user']['id'],f'Updated task status: {task["title"]} → {status}')
     return bounce('/student/plan#tasks')
 
 
@@ -199,7 +924,7 @@ async def student_edit_task(task_id:int, request:Request):
     if status not in ('To Do','In Progress','Completed'):status=task['status']
     run('UPDATE tasks SET title=?,details=?,due_date=?,priority=?,status=? WHERE id=?',
         (title,details,due_date,priority,status,task_id))
-    record(session['user']['id'],f'Student edited task #{task_id}')
+    record(session['user']['id'],f'Edited task: {title}')
     return bounce('/student/plan#tasks')
 
 
@@ -217,7 +942,7 @@ async def student_update_task_fields(task_id:int, request:Request):
     if priority not in ('Low','Medium','High'):priority=task['priority']
     if status not in ('To Do','In Progress','Completed'):status=task['status']
     run('UPDATE tasks SET priority=?,status=? WHERE id=?',(priority,status,task_id))
-    record(session['user']['id'],f'Student updated fields task #{task_id}: {priority}/{status}')
+    record(session['user']['id'],f'Updated task: {task["title"]} · {priority}/{status}')
     return bounce('/student/plan#tasks')
 
 
@@ -230,7 +955,7 @@ async def student_delete_task(task_id:int, request:Request):
     task=one('SELECT * FROM tasks WHERE id=? AND student_id=?',(task_id,sid))
     if not task:raise HTTPException(404)
     run('DELETE FROM tasks WHERE id=?',(task_id,))
-    record(session['user']['id'],f'Student deleted own task #{task_id}')
+    record(session['user']['id'],f'Deleted task: {task["title"]}')
     return bounce('/student/plan#tasks')
 
 
@@ -240,7 +965,7 @@ def student_checkin(request:Request):
     if not session:return bounce('/login')
     sid=session['user']['student_id']
     recent=all_rows('SELECT * FROM checkins WHERE student_id=? ORDER BY id DESC LIMIT 5',(sid,))
-    return page(request,'checkin.html',active='student_checkin',recent=recent,success=request.query_params.get('sent')=='1')
+    return page(request,'checkin.html',active='student_checkin',recent=recent,success=request.query_params.get('sent')=='1',checkin_state=weekly_checkin_state(sid))
 
 
 @app.post('/student/checkin')
@@ -248,18 +973,52 @@ async def student_checkin_action(request:Request):
     session=gate(request,'student')
     if not session:return bounce('/login')
     form=await request.form();verify_csrf(request,session,form)
+    sid=session['user']['student_id']
+    checkin_state=weekly_checkin_state(sid)
+    if checkin_state['is_completed']:
+        raise HTTPException(409,'This week’s check-in has already been submitted.')
+    if not checkin_state['is_open']:
+        raise HTTPException(403,'Weekly Check-in is available Friday 17:00 through Sunday 23:59, Bishkek time.')
     mood=str(form.get('mood',''))
     if mood not in ('Good','Okay','Difficult'):raise HTTPException(400,'Select a check-in rating')
     challenge=str(form.get('challenge','')).strip()[:300]
     priority=str(form.get('priority','')).strip()[:300]
     help_requested=1 if form.get('needs_help')=='yes' else 0
-    run('INSERT INTO checkins(student_id,mood,challenge,priority,needs_help) VALUES (?,?,?,?,?)',
-        (session['user']['student_id'],mood,challenge,priority,help_requested))
+    try:
+        run('INSERT INTO checkins(student_id,mood,challenge,priority,needs_help,week_key,created_at) VALUES (?,?,?,?,?,?,?)',
+            (sid,mood,challenge,priority,help_requested,checkin_state['week_key'],academic_now().isoformat(timespec='seconds')))
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(409,'This week’s check-in has already been submitted.') from exc
     if help_requested:
         run('INSERT INTO followups(student_id,title,due_date,priority) VALUES (?,?,?,?)',
-            (session['user']['student_id'],'Student requested support in weekly check-in',date.today().isoformat(),'High'))
+            (sid,'Student requested support in weekly check-in',academic_now().date().isoformat(),'High'))
     record(session['user']['id'],'Submitted weekly check-in')
     return bounce('/student/checkin?sent=1')
+
+
+@app.get('/student/notification/{notification_id}')
+def student_open_notification(notification_id:int, request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    notification=one(
+        'SELECT * FROM notifications WHERE id=? AND student_id=?',
+        (notification_id,session['user']['student_id']),
+    )
+    if not notification:raise HTTPException(404,'Notification not found')
+    run('UPDATE notifications SET read_at=COALESCE(read_at,?) WHERE id=?',
+        (academic_now().isoformat(timespec='seconds'),notification_id))
+    link=notification['link'] if str(notification['link']).startswith('/student') else '/student'
+    return bounce(link)
+
+
+@app.post('/student/notifications/read')
+async def student_read_notifications(request:Request):
+    session=gate(request,'student')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    run('UPDATE notifications SET read_at=COALESCE(read_at,?) WHERE student_id=?',
+        (academic_now().isoformat(timespec='seconds'),session['user']['student_id']))
+    return bounce('/student')
 
 
 @app.get('/student/meetings')
@@ -357,7 +1116,7 @@ async def student_toggle_deadline(deadline_id: int, request: Request):
         raise HTTPException(404, 'Deadline not found')
     new_status = 'Pending' if item['status'] == 'Completed' else 'Completed'
     run('UPDATE deadlines SET status=? WHERE id=?', (new_status, deadline_id))
-    record(session['user']['id'], f'Updated deadline #{deadline_id} status to {new_status}')
+    record(session['user']['id'], f'Updated deadline: {item["course"]} · {item["topic"]} → {new_status}')
     return bounce('/student/deadlines')
 
 
@@ -373,93 +1132,274 @@ async def student_delete_deadline(deadline_id: int, request: Request):
     if not item:
         raise HTTPException(404, 'Deadline not found')
     run('DELETE FROM deadlines WHERE id=? AND student_id=?', (deadline_id, sid))
-    record(session['user']['id'], f'Deleted deadline #{deadline_id}')
+    record(session['user']['id'], f'Deleted deadline: {item["course"]} · {item["topic"]}')
     return bounce('/student/deadlines')
 
 
 @app.get('/aac')
 def aac_home(request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    students=all_rows('SELECT * FROM students ORDER BY name')
+    scope,scope_params=staff_student_filter(session)
+    students=all_rows('SELECT * FROM students WHERE active=1'+scope+' ORDER BY name',scope_params)
+    scope_s,scope_s_params=staff_student_filter(session,'s')
     recent=all_rows('''SELECT f.*,s.name,s.avatar,s.id AS sid FROM followups f JOIN students s ON s.id=f.student_id
-               WHERE f.status="Open" ORDER BY CASE WHEN f.priority="High" THEN 0 ELSE 1 END,f.due_date LIMIT 6''')
+               WHERE f.status="Open" AND s.active=1'''+scope_s+''' ORDER BY CASE WHEN f.priority="High" THEN 0 ELSE 1 END,f.due_date LIMIT 6''',scope_s_params)
     next_meetings=all_rows('''SELECT m.*,s.name,s.avatar FROM meetings m JOIN students s ON s.id=m.student_id
-                     WHERE m.date>=? ORDER BY m.date LIMIT 5''',(date.today().isoformat(),))
-    log=all_rows('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 5')
-    stat={'students':len(students),'active':sum(s['status']=='Active Plan' for s in students),'followups':len(all_rows('SELECT id FROM followups WHERE status="Open"')),'review':sum(s['status']=='Needs Review' for s in students)}
+                     WHERE m.date>=? AND s.active=1'''+scope_s+''' ORDER BY m.date LIMIT 5''',[academic_now().date().isoformat(),*scope_s_params])
+    log=activity_rows(session['user'],5)
+    visible_ids={student['id'] for student in students}
+    open_followups=all_rows('SELECT student_id FROM followups WHERE status="Open"')
+    stat={'students':len(students),'on_track':sum(s['status']=='On Track' for s in students),'followups':sum(f['student_id'] in visible_ids for f in open_followups),'review':sum(s['status']=='Needs Review' for s in students)}
     return page(request,'aac_home.html',active='aac_home',stat=stat,students=students,followups=recent,meetings=next_meetings,logs=log)
 
 
 @app.get('/aac/students')
-def aac_students(request:Request,q:str='',status:str=''):
-    session=gate(request,'aac')
+def aac_students(
+    request:Request,
+    q:str='',
+    status:str='',
+    faculty:str='',
+    year:str='',
+    sort:str='az',
+):
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    query='SELECT * FROM students WHERE 1=1';params=[]
+    if status not in CASE_STATUSES:status=''
+    scope,scope_params=staff_student_filter(session)
+    faculties=[row['program'] for row in all_rows('SELECT DISTINCT program FROM students WHERE active=1'+scope+' ORDER BY program COLLATE NOCASE',scope_params)]
+    years=[str(row['year']) for row in all_rows('SELECT DISTINCT year FROM students WHERE active=1'+scope+' ORDER BY year',scope_params)]
+    if faculty not in faculties:faculty=''
+    if year not in years:year=''
+    if sort not in ('az','za'):sort='az'
+    query='SELECT * FROM students WHERE active=1'+scope;params=list(scope_params)
     if q:
         query+=' AND (LOWER(name) LIKE ? OR LOWER(student_code) LIKE ? OR LOWER(program) LIKE ?)'
         params += ['%'+q.lower()+'%']*3
     if status:
         query+=' AND status=?';params.append(status)
-    query+=' ORDER BY name'
+    if faculty:
+        query+=' AND program=?';params.append(faculty)
+    if year:
+        query+=' AND year=?';params.append(int(year))
+    query+=' ORDER BY name COLLATE NOCASE '+('DESC' if sort=='za' else 'ASC')
     students=all_rows(query,params)
-    return page(request,'students.html',active='aac_students',students=students,q=q,status=status)
+    return page(
+        request,'students.html',active='aac_students',students=students,
+        q=q,status=status,faculty=faculty,year=year,sort=sort,
+        faculties=faculties,years=years,
+    )
+
+
+@app.get('/aac/messages')
+def aac_messages(request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    scope,scope_params=staff_student_filter(session,'s')
+    message_scope=' AND m.staff_user_id=?'
+    message_params=[session['user']['id']]
+    threads=all_rows('''
+        SELECT s.*,
+          (SELECT body FROM chat_messages m WHERE m.student_id=s.id'''+message_scope+''' ORDER BY m.id DESC LIMIT 1) AS last_message,
+          (SELECT created_at FROM chat_messages m WHERE m.student_id=s.id'''+message_scope+''' ORDER BY m.id DESC LIMIT 1) AS last_message_at,
+          (SELECT staff_user_id FROM chat_messages m WHERE m.student_id=s.id'''+message_scope+''' ORDER BY m.id DESC LIMIT 1) AS last_contact_id,
+          (SELECT COUNT(*) FROM chat_messages m WHERE m.student_id=s.id AND m.read_by_aac=0'''+message_scope+''') AS unread_count
+        FROM students s
+        WHERE s.active=1'''+scope+'''
+        ORDER BY (last_message_at IS NULL),last_message_at DESC,s.name COLLATE NOCASE
+    ''',[*message_params,*message_params,*message_params,*message_params,*scope_params])
+    return page(
+        request,'messages.html',active='aac_messages',threads=threads,
+        staff_contacts=internal_staff_contacts(session['user']),
+    )
+
+
+@app.get('/aac/staff-chat/{peer_id}')
+def aac_staff_chat(peer_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    peer=internal_staff_peer(session['user'],peer_id)
+    run(
+        '''UPDATE staff_messages SET read_at=?
+           WHERE sender_user_id=? AND recipient_user_id=? AND read_at IS NULL''',
+        (academic_now().isoformat(timespec='seconds'),peer['id'],session['user']['id']),
+    )
+    messages=all_rows(
+        '''SELECT m.*,u.display_name AS sender_name
+           FROM staff_messages m JOIN users u ON u.id=m.sender_user_id
+           WHERE (m.sender_user_id=? AND m.recipient_user_id=?)
+              OR (m.sender_user_id=? AND m.recipient_user_id=?)
+           ORDER BY m.id''',
+        (session['user']['id'],peer['id'],peer['id'],session['user']['id']),
+    )
+    return page(
+        request,'staff_chat.html',active='aac_messages',peer=peer,messages=messages,
+    )
+
+
+@app.post('/aac/staff-chat/{peer_id}')
+async def aac_send_staff_chat(peer_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    peer=internal_staff_peer(session['user'],peer_id)
+    body=str(form.get('body','')).strip()
+    if not body:raise HTTPException(400,'Message cannot be empty')
+    if len(body)>2000:raise HTTPException(400,'Message is too long')
+    run(
+        '''INSERT INTO staff_messages
+           (sender_user_id,recipient_user_id,body,created_at)
+           VALUES (?,?,?,?)''',
+        (session['user']['id'],peer['id'],body,academic_now().isoformat(timespec='seconds')),
+    )
+    record(session['user']['id'],f'Sent a private staff message to user #{peer["id"]}')
+    return bounce(f'/aac/staff-chat/{peer["id"]}#latest')
 
 
 @app.get('/aac/student/{student_id}')
 def aac_student_detail(student_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    student=one('SELECT * FROM students WHERE id=?',(student_id,))
-    if not student:raise HTTPException(404,'Demo student not found')
+    student=allowed_student(student_id,session)
     goals=all_rows('SELECT * FROM goals WHERE student_id=? ORDER BY id',(student_id,))
     tasks=all_rows('SELECT * FROM tasks WHERE student_id=? ORDER BY due_date',(student_id,))
     meetings=all_rows('SELECT * FROM meetings WHERE student_id=? ORDER BY date DESC',(student_id,))
+    for meeting in meetings:
+        meeting['can_edit']=can_edit_meeting(meeting,session['user'])
     followups=all_rows('SELECT * FROM followups WHERE student_id=? ORDER BY CASE WHEN status="Open" THEN 0 ELSE 1 END,due_date',(student_id,))
     checkins=all_rows('SELECT * FROM checkins WHERE student_id=? ORDER BY id DESC LIMIT 5',(student_id,))
     return page(request,'student_detail.html',active='aac_students',student=student,goals=goals,tasks=tasks,meetings=meetings,followups=followups,checkins=checkins)
 
 
-def allowed_student(student_id):
-    if not one('SELECT id FROM students WHERE id=?',(student_id,)):
-        raise HTTPException(404,'Student not found')
+@app.get('/aac/student/{student_id}/schedule')
+def aac_student_schedule(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    allowed_student(student_id,session)
+    context=build_schedule_context(student_id,request.query_params.get('week',''))
+    return page(
+        request,'schedule.html',active='aac_students',schedule_readonly=True,
+        schedule_url=f'/aac/student/{student_id}/schedule',
+        profile_url=f'/aac/student/{student_id}',**context,
+    )
+
+
+@app.get('/aac/student/{student_id}/chat')
+def aac_student_chat(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    student=allowed_student(student_id,session)
+    selected_contact=staff_chat_contact(
+        student,session['user'],request.query_params.get('contact')
+    )
+    contacts=[selected_contact]
+    run(
+        '''UPDATE chat_messages SET read_by_aac=1
+           WHERE student_id=? AND staff_user_id=? AND read_by_aac=0''',
+        (student_id,selected_contact['id']),
+    )
+    return page(
+        request,'chat.html',active='aac_messages',student=student,
+        messages=chat_thread(student_id,selected_contact['id']),contacts=contacts,selected_contact=selected_contact,
+        chat_action=f'/aac/student/{student_id}/chat',back_url=f'/aac/student/{student_id}',
+        back_label='Back to Student Profile',is_aac=True,
+    )
+
+
+@app.post('/aac/student/{student_id}/chat')
+async def aac_send_chat(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    student=allowed_student(student_id,session)
+    selected_contact=staff_chat_contact(student,session['user'],form.get('contact'))
+    body=str(form.get('body','')).strip()
+    if not body:raise HTTPException(400,'Message cannot be empty')
+    if len(body)>2000:raise HTTPException(400,'Message is too long')
+    run(
+        '''INSERT INTO chat_messages
+           (student_id,staff_user_id,sender_user_id,body,created_at,read_by_student,read_by_aac)
+           VALUES (?,?,?,?,?,0,1)''',
+        (student_id,selected_contact['id'],session['user']['id'],body,academic_now().isoformat(timespec='seconds')),
+    )
+    record(session['user']['id'],f'Sent a chat message to student #{student_id}')
+    return bounce(f'/aac/student/{student_id}/chat?contact={selected_contact["id"]}#latest')
 
 
 
 @app.post('/aac/student/{student_id}/goal')
 async def aac_add_goal(student_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id)
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
     title=str(form.get('title','')).strip()[:140]
     target=str(form.get('target','')).strip()[:180]
     if not title or not target:raise HTTPException(400,'Goal and target required')
     run('INSERT INTO goals(student_id,title,target) VALUES (?,?,?)',(student_id,title,target))
-    record(session['user']['id'],f'Created goal for demo student #{student_id}')
+    record(session['user']['id'],f'Created goal for student #{student_id}')
     return bounce(f'/aac/student/{student_id}#goals')
 
 
 @app.post('/aac/student/{student_id}/meeting')
 async def aac_add_meeting(student_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id)
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
     topic=str(form.get('topic','')).strip()[:140]
     day=str(form.get('date',''))
+    meeting_time=str(form.get('time','')).strip()
     if not topic:raise HTTPException(400,'Topic required')
-    try:date.fromisoformat(day)
-    except ValueError:raise HTTPException(400,'Invalid date')
-    run('INSERT INTO meetings(student_id,date,topic,advisor,notes) VALUES (?,?,?,?,?)',
-        (student_id,day,topic,session['user']['display_name'],str(form.get('notes','')).strip()[:400]))
-    record(session['user']['id'],f'Created meeting for demo student #{student_id}')
+    try:
+        date.fromisoformat(day)
+        datetime.strptime(meeting_time,'%H:%M')
+    except ValueError:raise HTTPException(400,'Enter a valid meeting date and time')
+    meeting_id=run(
+        '''INSERT INTO meetings
+           (student_id,date,time,topic,advisor,notes,created_by_user_id,owner_role)
+           VALUES (?,?,?,?,?,?,?,?)''',
+        (
+            student_id,day,meeting_time,topic,session['user']['display_name'],
+            str(form.get('notes','')).strip()[:400],session['user']['id'],session['user']['role'],
+        ),
+    )
+    meeting_day=datetime.fromisoformat(day).strftime('%b %d, %Y')
+    create_student_notification(
+        student_id,'appointment','New advising appointment',
+        f'{topic} · {meeting_day} at {meeting_time} with {session["user"]["display_name"]}.',
+        '/student/meetings',
+    )
+    record(session['user']['id'],f'Created meeting for student #{student_id}')
+    return bounce(f'/aac/student/{student_id}#meetings')
+
+
+@app.post('/aac/student/{student_id}/meeting/{meeting_id}/time')
+async def aac_update_meeting_time(student_id:int,meeting_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
+    meeting=one('SELECT * FROM meetings WHERE id=? AND student_id=?',(meeting_id,student_id))
+    if not meeting:raise HTTPException(404,'Meeting not found')
+    require_meeting_editor(meeting,session['user'])
+    meeting_time=str(form.get('time','')).strip()
+    try:datetime.strptime(meeting_time,'%H:%M')
+    except ValueError:raise HTTPException(400,'Enter a valid meeting time')
+    run('UPDATE meetings SET time=? WHERE id=?',(meeting_time,meeting_id))
+    action='Changed' if meeting['time'] else 'Assigned'
+    meeting_day=datetime.fromisoformat(meeting['date']).strftime('%b %d, %Y')
+    create_student_notification(
+        student_id,'appointment','Advising appointment updated',
+        f'{meeting["topic"]} · {meeting_day} at {meeting_time}.',
+        '/student/meetings',
+    )
+    record(session['user']['id'],f'{action} time for meeting #{meeting_id}: {meeting_time}')
     return bounce(f'/aac/student/{student_id}#meetings')
 
 
 @app.post('/aac/student/{student_id}/followup')
 async def aac_add_followup(student_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id)
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
     title=str(form.get('title','')).strip()[:150]
     day=str(form.get('due_date',''))
     if not title:raise HTTPException(400,'Title required')
@@ -467,31 +1407,31 @@ async def aac_add_followup(student_id:int,request:Request):
     except ValueError:raise HTTPException(400,'Invalid date')
     priority='High' if form.get('priority')=='High' else 'Normal'
     run('INSERT INTO followups(student_id,title,due_date,priority) VALUES (?,?,?,?)',(student_id,title,day,priority))
-    record(session['user']['id'],f'Created follow-up for demo student #{student_id}')
+    record(session['user']['id'],f'Created follow-up for student #{student_id}')
     return bounce(f'/aac/student/{student_id}#followups')
 
 
 @app.post('/aac/student/{student_id}/status')
 async def aac_update_case_status(student_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id)
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
     status=str(form.get('status',''))
-    allowed=('Initial Assessment','Active Plan','On Track','Needs Review','Semester Review')
-    if status not in allowed:raise HTTPException(400,'Invalid case status')
+    if status not in CASE_STATUSES:raise HTTPException(400,'Invalid case status')
     run('UPDATE students SET status=? WHERE id=?',(status,student_id))
-    record(session['user']['id'],f'Updated support case status for demo student #{student_id} to {status}')
+    record(session['user']['id'],f'Updated support case status for student #{student_id} to {status}')
     return bounce(f'/aac/student/{student_id}')
 
 
 
 @app.post('/aac/followup/{followup_id}/resolve')
 async def aac_resolve_followup(followup_id:int,request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
     verify_csrf(request,session,await request.form())
     f=one('SELECT * FROM followups WHERE id=?',(followup_id,))
     if not f:raise HTTPException(404)
+    allowed_student(f['student_id'],session)
     run('UPDATE followups SET status="Resolved" WHERE id=?',(followup_id,))
     record(session['user']['id'],f'Resolved follow-up #{followup_id}')
     return bounce(f"/aac/student/{f['student_id']}#followups")
@@ -499,22 +1439,24 @@ async def aac_resolve_followup(followup_id:int,request:Request):
 
 @app.get('/aac/plans')
 def aac_plans(request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
+    scope,scope_params=staff_student_filter(session,'s')
     students=all_rows('''SELECT s.*,COUNT(g.id) AS goals_count FROM students s
-                   LEFT JOIN goals g ON s.id=g.student_id GROUP BY s.id ORDER BY s.name''')
+                   LEFT JOIN goals g ON s.id=g.student_id WHERE s.active=1'''+scope+''' GROUP BY s.id ORDER BY s.name''',scope_params)
     return page(request,'plans.html',active='aac_plans',students=students)
 
 
 @app.get('/aac/activity')
 def aac_activity(request:Request):
-    session=gate(request,'aac')
+    session=gate_staff(request)
     if not session:return bounce('/login')
-    logs=all_rows('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 50')
+    logs=activity_rows(session['user'],50)
     return page(request,'activity.html',active='aac_activity',logs=logs)
 
 
 if __name__=='__main__':
     import uvicorn
-    print('\nACADEMIC WEAPON LOCAL DEMO: http://127.0.0.1:8000\nThis app uses SYNTHETIC data only. Do not enter real academic records.\n')
+    mode = 'DEMO' if DEMO_MODE else 'RESTRICTED LOCAL DATA'
+    print(f'\nACADEMIC WEAPON {mode}: http://127.0.0.1:8000\n')
     uvicorn.run('app:app',host='127.0.0.1',port=8000,reload=True,log_level='warning')

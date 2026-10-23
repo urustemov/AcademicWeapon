@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% macro render_schedule_entry(entry, csrf_token, selected_week, readonly=False) %}
+  {% if entry.kind == 'course' %}
+  <article class="schedule-entry course-entry">
+    <div class="schedule-entry-time">{{ entry.start_time }}–{{ entry.end_time }}</div>
+    <strong>{{ entry.name }}</strong>
+    <span>Room {{ entry.room }}</span>
+    <span>{{ entry.instructor }}</span>
+    <div class="schedule-entry-footer">
+      <small>{{ entry.credits }} credits</small>
+      {% if not readonly %}<form method="post" action="/student/schedule/course/{{ entry.id }}/delete" onsubmit="return confirm('Remove this course from your schedule?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="week" value="{{ selected_week }}">
+        <button type="submit" class="schedule-delete" aria-label="Remove {{ entry.name }}">Remove</button>
+      </form>{% endif %}
+    </div>
+  </article>
+  {% else %}
+  <article class="schedule-entry meeting-entry">
+    <div class="schedule-entry-time">{{ entry.time if entry.time else 'Time not set' }}</div>
+    <strong>{{ entry.topic }}</strong>
+    <span>Advising meeting</span>
+    <span>{{ entry.advisor }}</span>
+  </article>
+  {% endif %}
+{% endmacro %}
+{% block title %}{{ student.name ~ "'s Schedule" if schedule_readonly else 'My Schedule' }}{% endblock %}
+{% block crumb %}{{ 'Student Management / Schedule' if schedule_readonly else 'My Schedule' }}{% endblock %}
+{% block content %}
+<div class="page-heading schedule-heading">
+  <div>
+    <div class="eyebrow dark">SEMESTER TIMETABLE</div>
+    <h1>{{ student.name ~ "'s Weekly Schedule" if schedule_readonly else 'My Weekly Schedule' }}</h1>
+    {% if schedule_readonly %}
+    <p>View the student's recurring courses and advising meetings for the selected week.</p>
+    {% else %}
+    <p>Add your semester courses once. They repeat every week, and scheduled advising meetings appear alongside them.</p>
+    {% endif %}
+  </div>
+  <div class="schedule-heading-actions">
+    <span class="credit-load-chip">
+      <small>CREDIT LOAD</small>
+      <strong>{{ student.credit_load }} credits</strong>
+    </span>
+    {% if schedule_readonly %}
+    <span class="readonly-badge schedule-readonly-badge">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      View only
+    </span>
+    <a class="secondary-btn" href="{{ profile_url }}">Back to profile</a>
+    {% else %}
+    <button class="primary-btn" type="button" data-open-course-modal>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      Add course to the schedule
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<section class="panel schedule-panel">
+  <div class="schedule-toolbar">
+    <a class="secondary-btn schedule-nav-btn" href="{{ schedule_url }}?week={{ previous_week }}" aria-label="Previous week">←</a>
+    <div class="schedule-week-title">
+      <span class="section-overline">SELECTED WEEK</span>
+      <h2>{{ week_title }}</h2>
+    </div>
+    <div class="schedule-nav-group">
+      <a class="secondary-btn" href="{{ schedule_url }}?week={{ current_week }}">This week</a>
+      <a class="secondary-btn schedule-nav-btn" href="{{ schedule_url }}?week={{ next_week }}" aria-label="Next week">→</a>
+    </div>
+  </div>
+
+  <div class="schedule-legend" aria-label="Schedule legend">
+    <span><i class="legend-dot course-dot"></i>Course</span>
+    <span><i class="legend-dot meeting-dot"></i>Advising meeting</span>
+  </div>
+
+  <div class="schedule-table-wrap">
+    <div class="schedule-timetable">
+      <div class="schedule-time-corner">TIME</div>
+      {% for day in days %}
+      <header class="schedule-column-header {{ 'today' if day.is_today else '' }}">
+        <strong>{{ day.label }}</strong>
+        <span>{{ day.date_label }}</span>
+        {% if day.is_today %}<small>TODAY</small>{% endif %}
+      </header>
+      {% endfor %}
+
+      {% for row in schedule_rows %}
+      <div class="schedule-time-cell {{ row.kind }}">
+        <strong>{{ row.label }}</strong>
+        {% if row.kind == 'custom' %}<small>BETWEEN CLASSES</small>{% endif %}
+        {% if row.kind == 'unscheduled' %}<small>NEEDS TIME</small>{% endif %}
+      </div>
+      {% for day in days %}
+      <div class="schedule-table-cell {{ 'today' if day.is_today else '' }} {{ row.kind }}">
+        {% for entry in row.cells[day.code] %}
+          {{ render_schedule_entry(entry, csrf, week_start, schedule_readonly) }}
+        {% endfor %}
+      </div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="schedule-mobile">
+    {% for day in days %}
+    <section class="schedule-day {{ 'today' if day.is_today else '' }}">
+      <header class="schedule-day-header">
+        <div><strong>{{ day.label }}</strong><span>{{ day.date_label }}</span></div>
+        {% if day.is_today %}<small>TODAY</small>{% endif %}
+      </header>
+      <div class="schedule-day-body">
+        {% for entry in day.entries %}
+          {{ render_schedule_entry(entry, csrf, week_start, schedule_readonly) }}
+        {% else %}
+          <p class="schedule-empty">No classes or meetings</p>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+</section>
+
+{% if not schedule_readonly %}<div id="courseModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="courseModalTitle">
+  <div class="modal-box schedule-modal-box">
+    <div class="modal-header">
+      <div>
+        <span class="section-overline">SEMESTER COURSE</span>
+        <h3 id="courseModalTitle">Add course to the schedule</h3>
+      </div>
+      <button class="modal-close" type="button" data-close-course-modal aria-label="Close">✕</button>
+    </div>
+    <form method="post" action="/student/schedule/course" class="modal-form">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <input type="hidden" name="week" value="{{ week_start }}">
+      <div class="form-row-2">
+        <div class="form-group">
+          <label for="courseName">Course name <span class="req">*</span></label>
+          <input class="form-input" id="courseName" name="name" required maxlength="120" placeholder="e.g. Introduction to Psychology">
+        </div>
+        <div class="form-group">
+          <label for="courseCredits">Credits <span class="req">*</span></label>
+          <input class="form-input" id="courseCredits" name="credits" type="number" min="1" max="12" required placeholder="6">
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label for="courseRoom">Room <span class="req">*</span></label>
+          <input class="form-input" id="courseRoom" name="room" required maxlength="60" placeholder="e.g. 315">
+        </div>
+        <div class="form-group">
+          <label for="courseInstructor">Instructor surname <span class="req">*</span></label>
+          <input class="form-input" id="courseInstructor" name="instructor" required maxlength="100" placeholder="e.g. Smith">
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="form-label">Days of the week <span class="req">*</span></span>
+        <div class="weekday-picker">
+          {% for code,label in weekdays %}
+          <label><input type="checkbox" name="days" value="{{ code }}"><span>{{ code }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="courseTimeSlot">Class time <span class="req">*</span></label>
+        <select class="form-input" id="courseTimeSlot" name="time_slot" required>
+          <option value="" selected disabled>Select a standard class period</option>
+          {% for slot_id,start_time,end_time,label in course_slots %}
+          <option value="{{ slot_id }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p class="schedule-form-note">Courses use the standard AUCA periods. Credits are counted once, even when a course meets on several days.</p>
+      <div class="modal-actions">
+        <button class="secondary-btn" type="button" data-close-course-modal>Cancel</button>
+        <button class="primary-btn" type="submit">Add course</button>
+      </div>
+    </form>
+  </div>
+</div>{% endif %}
+{% endblock %}

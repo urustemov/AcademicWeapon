@@ -22,6 +22,14 @@
         <span class="count-bubble">2 min</span>
       </div>
 
+      <div class="checkin-window-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline></svg>
+        <div>
+          <strong>Weekly submission window</strong>
+          <span>{{ checkin_state.window_label }} · Bishkek time</span>
+        </div>
+      </div>
+
       {% if success %}
       <div class="alert success">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -30,14 +38,31 @@
           <a href="https://auca.kg/en/p6396607525/" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; font-weight: 700; color: inherit;">book an advising consultation here ↗</a>.
         </div>
       </div>
-      {% endif %}
-
+      {% elif checkin_state.is_completed %}
+      <div class="checkin-state-card complete">
+        <span class="checkin-state-icon">✓</span>
+        <div>
+          <h3>This week’s Check-in is complete</h3>
+          <p>You do not need to submit another reflection this week. The next one opens {{ checkin_state.next_open_label }}.</p>
+        </div>
+      </div>
+      {% elif not checkin_state.is_open %}
+      <div class="checkin-state-card locked">
+        <span class="checkin-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+        </span>
+        <div>
+          <h3>Weekly Check-in is currently closed</h3>
+          <p>The next submission window opens {{ checkin_state.next_open_label }} and closes Sunday at 23:59.</p>
+        </div>
+      </div>
+      {% else %}
       <form action="/student/checkin" method="post" class="form-stack padded-form">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
 
         <!-- Question 1: Mood Selection -->
         <div class="form-group">
-          <label class="field-title">1. How was your academic week overall?</label>
+          <label class="field-title">1. How was your week overall?</label>
           <div class="radio-chips">
             <label>
               <input type="radio" name="mood" value="Good" required>
@@ -71,7 +96,7 @@
 
         <!-- Question 3: Next Priority -->
         <div class="form-group">
-          <label class="field-title" for="priority">3. What is your single main priority for next week?</label>
+          <label class="field-title" for="priority">3. What is your main priority for next week?</label>
           <textarea id="priority" name="priority" maxlength="300" rows="3" placeholder="The one academic milestone or task you want to focus on..."></textarea>
         </div>
 
@@ -113,6 +138,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
         </button>
       </form>
+      {% endif %}
     </section>
   </div>
 

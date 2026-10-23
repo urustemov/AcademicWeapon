@@ -62,15 +62,62 @@
     screen.addEventListener('click', closeSidebar);
   }
 
+  // --- Student notification bell ---
+  const notificationCenter = document.querySelector('[data-notification-center]');
+  const notificationToggle = document.querySelector('[data-notification-toggle]');
+
+  const closeNotifications = () => {
+    if (!notificationCenter || !notificationToggle) return;
+    notificationCenter.classList.remove('open');
+    notificationToggle.setAttribute('aria-expanded', 'false');
+  };
+
+  if (notificationCenter && notificationToggle) {
+    notificationToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = notificationCenter.classList.toggle('open');
+      notificationToggle.setAttribute('aria-expanded', String(isOpen));
+    });
+    notificationCenter.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', closeNotifications);
+  }
+
   // Close sidebar on escape key
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSidebar();
+    if (e.key === 'Escape') {
+      closeSidebar();
+      closeNotifications();
+    }
   });
 
   // Close sidebar when navigating via link on mobile
   document.querySelectorAll('.main-nav a').forEach((link) => {
     link.addEventListener('click', closeSidebar);
   });
+
+  // --- Private advising chat ---
+  const chatThread = document.querySelector('[data-chat-thread]');
+  const chatForm = document.querySelector('[data-chat-form]');
+  const chatInput = document.querySelector('[data-chat-input]');
+  const chatCount = document.querySelector('[data-chat-count]');
+
+  if (chatThread) {
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  if (chatInput && chatCount) {
+    const updateChatCount = () => {
+      chatCount.textContent = String(chatInput.value.length);
+    };
+    chatInput.addEventListener('input', updateChatCount);
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && chatForm) {
+        e.preventDefault();
+        if (chatInput.reportValidity()) chatForm.requestSubmit();
+      }
+    });
+    updateChatCount();
+  }
 
   // --- Quick Demo Account Selector (Login Page) ---
   document.querySelectorAll('[data-email][data-password]').forEach((btn) => {
@@ -127,6 +174,78 @@
     if (e.key === 'Escape' && modal && modal.classList.contains('open')) {
       closeAdvisorModal();
     }
+  });
+
+  // --- Semester schedule course modal ---
+  const courseModal = document.getElementById('courseModal');
+  const courseForm = courseModal ? courseModal.querySelector('form') : null;
+  const openCourseModal = () => {
+    if (!courseModal) return;
+    courseModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    const firstField = courseModal.querySelector('input:not([type="hidden"])');
+    if (firstField) firstField.focus();
+  };
+  const closeCourseModal = () => {
+    if (!courseModal) return;
+    courseModal.style.display = 'none';
+    document.body.style.overflow = '';
+  };
+
+  document.querySelectorAll('[data-open-course-modal]').forEach((button) => {
+    button.addEventListener('click', openCourseModal);
+  });
+  document.querySelectorAll('[data-close-course-modal]').forEach((button) => {
+    button.addEventListener('click', closeCourseModal);
+  });
+  if (courseModal) {
+    courseModal.addEventListener('click', (e) => {
+      if (e.target === courseModal) closeCourseModal();
+    });
+  }
+  if (courseForm) {
+    courseForm.addEventListener('submit', (e) => {
+      const dayInputs = [...courseForm.querySelectorAll('input[name="days"]')];
+      if (!dayInputs.some((input) => input.checked)) {
+        e.preventDefault();
+        dayInputs[0].setCustomValidity('Select at least one day of the week.');
+        dayInputs[0].reportValidity();
+      }
+    });
+    courseForm.querySelectorAll('input[name="days"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        courseForm.querySelectorAll('input[name="days"]').forEach((day) => day.setCustomValidity(''));
+      });
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && courseModal && courseModal.style.display !== 'none') {
+      closeCourseModal();
+    }
+  });
+
+  // --- Collapsible message directories and instant local search ---
+  document.querySelectorAll('[data-message-directory]').forEach((directory) => {
+    const search = directory.querySelector('[data-message-search]');
+    const items = [...directory.querySelectorAll('[data-message-item]')];
+    const noResults = directory.querySelector('[data-message-no-results]');
+    const resultCount = directory.querySelector('[data-message-result-count]');
+    if (!search) return;
+
+    const filterDirectory = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      items.forEach((item) => {
+        const haystack = (item.dataset.searchText || item.textContent).toLocaleLowerCase();
+        const matches = !query || haystack.includes(query);
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      if (noResults) noResults.hidden = visible !== 0;
+      if (resultCount) resultCount.textContent = `${visible} shown`;
+    };
+
+    search.addEventListener('input', filterDirectory);
   });
 
   // Initial theme setup verification
