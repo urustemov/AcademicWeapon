@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: academic-weapon-staging
+    runtime: python
+    region: frankfurt
+    plan: 0.5c-512mb
+    numInstances: 1
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --no-server-header
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APSS_DEMO_MODE
+        value: "0"
+      - key: APSS_DB_PATH
+        value: /var/data/academic_weapon.sqlite3
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_WORKSPACE_DOMAIN
+        value: auca.kg
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: SESSION_TTL_SECONDS
+        value: "43200"
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com"
+      - key: LOGIN_RATE_LIMIT
+        value: "20"
+      - key: LOGIN_RATE_WINDOW_SECONDS
+        value: "900"
+      - key: ACADEMIC_TIMEZONE
+        value: Asia/Bishkek
+    disk:
+      name: academic-weapon-data
+      mountPath: /var/data
+      sizeGB: 1

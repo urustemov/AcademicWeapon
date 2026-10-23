@@ -1,11 +1,13 @@
 """Academic Weapon FastAPI application."""
 from __future__ import annotations
 import os
+from collections import defaultdict, deque
 from pathlib import Path
 import secrets
 import logging
 import sqlite3
 from datetime import date, datetime, time, timedelta
+from time import monotonic
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -14,6 +16,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import URLSafeTimedSerializer, BadSignature
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 
 BASE_PATH = Path(__file__).resolve().parent
@@ -47,26 +51,106 @@ except ImportError:  # The login page explains that dependencies still need setu
     google_requests = None
     google_id_token = None
 
+APP_ENV = os.getenv('APP_ENV', 'development').strip().lower()
+IS_PRODUCTION = APP_ENV == 'production'
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '').strip()
+GOOGLE_WORKSPACE_DOMAIN = os.getenv('GOOGLE_WORKSPACE_DOMAIN', 'auca.kg').strip().lower()
+SESSION_TTL_SECONDS = int(os.getenv('SESSION_TTL_SECONDS', str(60 * 60 * 12)))
+SESSION_COOKIE_SECURE = os.getenv(
+    'SESSION_COOKIE_SECURE', '1' if IS_PRODUCTION else '0'
+).strip().lower() in {'1', 'true', 'yes', 'on'}
+SESSION_COOKIE_NAME = '__Host-academic_weapon_session' if IS_PRODUCTION else 'apss_demo_session'
+ALLOWED_HOSTS = [
+    host.strip() for host in os.getenv(
+        'ALLOWED_HOSTS', '127.0.0.1,localhost,testserver'
+    ).split(',') if host.strip()
+]
+LOGIN_RATE_LIMIT = int(os.getenv('LOGIN_RATE_LIMIT', '20' if IS_PRODUCTION else '1000'))
+LOGIN_RATE_WINDOW_SECONDS = int(os.getenv('LOGIN_RATE_WINDOW_SECONDS', '900'))
+ACADEMIC_TIMEZONE = ZoneInfo(os.getenv('ACADEMIC_TIMEZONE', 'Asia/Bishkek'))
+
+if IS_PRODUCTION:
+    if DEMO_MODE:
+        raise RuntimeError('APSS_DEMO_MODE must be 0 in production.')
+    if not GOOGLE_CLIENT_ID:
+        raise RuntimeError('GOOGLE_CLIENT_ID is required in production.')
+    if not SESSION_COOKIE_SECURE:
+        raise RuntimeError('SESSION_COOKIE_SECURE must be enabled in production.')
+    if not DB_PATH.is_absolute():
+        raise RuntimeError('APSS_DB_PATH must be an absolute persistent path in production.')
+
+session_secret = os.getenv('SESSION_SECRET', '').strip()
+if not session_secret:
+    if IS_PRODUCTION:
+        raise RuntimeError('SESSION_SECRET is required in production.')
+    secret_path = BASE_DIR / '.apss_local_secret'
+    if not secret_path.exists():
+        secret_path.write_text(secrets.token_urlsafe(48), encoding='utf-8')
+    session_secret = secret_path.read_text(encoding='utf-8').strip()
+
 seed_database()
-secret_path = BASE_DIR / '.apss_local_secret'
-if not secret_path.exists():
-    secret_path.write_text(secrets.token_urlsafe(48), encoding='utf-8')
 signer = URLSafeTimedSerializer(
-    secret_path.read_text(encoding='utf-8'),
+    session_secret,
     # Binding sessions to the selected database prevents a user ID from one
     # environment being reused after switching between demo and real data.
     salt=f'academic-weapon-session:{DB_PATH.resolve()}',
 )
 
-GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '').strip()
-GOOGLE_WORKSPACE_DOMAIN = os.getenv('GOOGLE_WORKSPACE_DOMAIN', 'auca.kg').strip().lower()
-SESSION_TTL_SECONDS = int(os.getenv('SESSION_TTL_SECONDS', str(60 * 60 * 12)))
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', '0').strip().lower() in {'1', 'true', 'yes', 'on'}
-ACADEMIC_TIMEZONE = ZoneInfo(os.getenv('ACADEMIC_TIMEZONE', 'Asia/Bishkek'))
-
 app = FastAPI(title='Academic Weapon · AUCA', docs_url=None, redoc_url=None)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+if IS_PRODUCTION:
+    app.add_middleware(HTTPSRedirectMiddleware)
 app.mount('/static', StaticFiles(directory=BASE_DIR / 'static'), name='static')
 templates = Jinja2Templates(directory=BASE_DIR / 'templates')
+
+
+@app.middleware('http')
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if not request.url.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-store'
+    if IS_PRODUCTION:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+            "form-action 'self' https://accounts.google.com; "
+            "script-src 'self' 'unsafe-inline' https://accounts.google.com; "
+            "style-src 'self' 'unsafe-inline' https://accounts.google.com; "
+            "frame-src https://accounts.google.com; "
+            "connect-src 'self' https://accounts.google.com; "
+            "img-src 'self' data: https://*.googleusercontent.com; "
+            "font-src 'self' data:; upgrade-insecure-requests"
+        )
+    return response
+
+
+login_attempts = defaultdict(deque)
+
+
+def login_client_key(request: Request) -> str:
+    return request.client.host if request.client else 'unknown'
+
+
+def enforce_login_rate_limit(request: Request):
+    """Apply a small in-process throttle to authentication endpoints."""
+    key = login_client_key(request)
+    now = monotonic()
+    attempts = login_attempts[key]
+    cutoff = now - LOGIN_RATE_WINDOW_SECONDS
+    while attempts and attempts[0] < cutoff:
+        attempts.popleft()
+    if len(attempts) >= LOGIN_RATE_LIMIT:
+        raise HTTPException(429, 'Too many sign-in attempts. Please wait and try again.')
+    attempts.append(now)
+
+
+def clear_login_rate_limit(request: Request):
+    login_attempts.pop(login_client_key(request), None)
 
 
 def nice_date(value):
@@ -222,7 +306,7 @@ templates.env.globals['case_statuses'] = CASE_STATUSES
 
 
 def current_session(request):
-    cookie = request.cookies.get('apss_demo_session')
+    cookie = request.cookies.get(SESSION_COOKIE_NAME)
     if not cookie:
         return None
     try:
@@ -339,6 +423,7 @@ def page(request, template, **data):
         'google_login_uri':str(request.url_for('google_login')) if GOOGLE_CLIENT_ID else '',
         'google_workspace_domain':GOOGLE_WORKSPACE_DOMAIN,
         'demo_mode':DEMO_MODE,
+        'local_login_enabled':DEMO_MODE and not IS_PRODUCTION,
         'unread_chat_count':unread_chat_count,
         'notifications':notifications,
         'unread_notification_count':unread_notification_count,
@@ -384,7 +469,7 @@ def issue_session(user):
     token=signer.dumps({'uid':user['id'],'csrf':secrets.token_urlsafe(24)})
     response=bounce('/student' if user['role']=='student' else '/aac')
     response.set_cookie(
-        'apss_demo_session', token, max_age=SESSION_TTL_SECONDS,
+        SESSION_COOKIE_NAME, token, max_age=SESSION_TTL_SECONDS,
         httponly=True, samesite='lax', secure=SESSION_COOKIE_SECURE, path='/'
     )
     return response
@@ -408,6 +493,18 @@ def index(request:Request):
     return bounce('/student' if session['user']['role']=='student' else '/aac') if session else bounce('/login')
 
 
+@app.get('/healthz', include_in_schema=False)
+def healthz():
+    try:
+        database=one('SELECT 1 AS healthy')
+    except sqlite3.Error as error:
+        auth_logger.error('Database health check failed: %s', type(error).__name__)
+        raise HTTPException(503, 'Service unavailable') from error
+    if not database or database['healthy'] != 1:
+        raise HTTPException(503, 'Service unavailable')
+    return {'status':'ok'}
+
+
 @app.get('/login')
 def login_page(request:Request):
     if gate(request):return bounce('/')
@@ -423,6 +520,9 @@ def login_page(request:Request):
 
 @app.post('/login')
 async def login_action(request:Request):
+    if not DEMO_MODE or IS_PRODUCTION:
+        raise HTTPException(404, 'Local password sign-in is disabled.')
+    enforce_login_rate_limit(request)
     form=await request.form()
     email=str(form.get('email','')).strip().lower()
     password=str(form.get('password',''))
@@ -434,9 +534,11 @@ async def login_action(request:Request):
             'google_login_uri':str(request.url_for('google_login')) if GOOGLE_CLIENT_ID else '',
             'google_workspace_domain':GOOGLE_WORKSPACE_DOMAIN,
             'demo_mode':DEMO_MODE,
+            'local_login_enabled':True,
             'error':'Email or password is incorrect.'},status_code=401)
     if not user.get('active', 1):
         return bounce('/login?error=inactive')
+    clear_login_rate_limit(request)
     return issue_session(user)
 
 
@@ -444,6 +546,7 @@ async def login_action(request:Request):
 async def google_login(request:Request):
     if not GOOGLE_CLIENT_ID:
         return bounce('/login?error=google_unavailable')
+    enforce_login_rate_limit(request)
     form=await request.form()
     csrf_form=str(form.get('g_csrf_token',''))
     csrf_cookie=str(request.cookies.get('g_csrf_token',''))
@@ -487,6 +590,7 @@ async def google_login(request:Request):
     if not user.get('google_sub'):
         run('UPDATE users SET google_sub=? WHERE id=?',(google_sub,user['id']))
     record(user['id'],'Signed in with Google Workspace')
+    clear_login_rate_limit(request)
     return issue_session(user)
 
 
@@ -496,7 +600,9 @@ async def logout(request:Request):
     if session:
         verify_csrf(request,session,await request.form())
     response=bounce('/login')
-    response.delete_cookie('apss_demo_session',path='/')
+    response.delete_cookie(
+        SESSION_COOKIE_NAME, path='/', secure=SESSION_COOKIE_SECURE, samesite='lax'
+    )
     return response
 
 

@@ -52,5 +52,11 @@ def test_synchronize_creates_google_only_accounts_in_separate_database(tmp_path)
             account=connection.execute('SELECT password_hash,google_sub,active FROM users WHERE email=?',('student.one@auca.kg',)).fetchone()
             assert account['password_hash']=='!google-only!'
             assert account['google_sub'] is None and account['active']==1
+            team=connection.execute(
+                'SELECT role,password_hash FROM users WHERE email=?',
+                ('urustemov_s@auca.kg',),
+            ).fetchone()
+            assert team['role']=='advising_team'
+            assert team['password_hash']=='!google-only!'
     finally:
         db.DB_PATH,db.DEMO_MODE=original_path,original_mode

@@ -311,6 +311,22 @@ def seed_database():
         # AUCA Advisor directory. Advising Team accounts are intentionally not
         # included here and therefore keep their separate, broader role.
         if not DEMO_MODE:
+            advising_team_accounts = (
+                ('Serdar Urustemov', 'urustemov_s@auca.kg'),
+                ('Umut Kydyrgychova', 'kydyrgychova_u@auca.kg'),
+                ('Aizada Tynyeva', 'tynyeva_a@auca.kg'),
+                ('Aidar Zhakypov', 'zhakypov_a@auca.kg'),
+            )
+            con.executemany(
+                '''INSERT INTO users(email,display_name,role,student_id,password_hash,active)
+                   VALUES (?,?,'advising_team',NULL,'!google-only!',1)
+                   ON CONFLICT(email) DO UPDATE SET
+                     display_name=excluded.display_name,
+                     role='advising_team',
+                     student_id=NULL,
+                     active=1''',
+                ((email,name) for name,email in advising_team_accounts),
+            )
             advisor_accounts = (
                 ('Elena Burova', 'burova_e@auca.kg'),
                 ('Taalaibek Imanaliev', 'imanaliev_t@auca.kg'),

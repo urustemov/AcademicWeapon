@@ -20,6 +20,28 @@ def test_google_verification_dependencies_are_available():
     assert app_module.google_requests is not None
 
 
+def test_health_check_and_baseline_security_headers():
+    with TestClient(app,follow_redirects=False) as client:
+        response=client.get('/healthz')
+        assert response.status_code==200 and response.json()=={'status':'ok'}
+        login=client.get('/login')
+        assert login.headers['x-content-type-options']=='nosniff'
+        assert login.headers['x-frame-options']=='DENY'
+        assert login.headers['referrer-policy']=='strict-origin-when-cross-origin'
+        assert login.headers['cache-control']=='no-store'
+
+
+def test_local_password_login_is_disabled_outside_demo(monkeypatch):
+    monkeypatch.setattr(app_module,'DEMO_MODE',False)
+    with TestClient(app,follow_redirects=False) as client:
+        page=client.get('/login')
+        assert page.status_code==200
+        assert 'id="loginForm"' not in page.text
+        assert client.post('/login',data={
+            'email':'student@demo.example','password':'Demo1234!',
+        }).status_code==404
+
+
 def test_private_chat_permissions_and_unread_state():
     advisor_body='<b>Can we review the private-chat test plan?</b>'
     student_body='Yes, private-chat test received.'

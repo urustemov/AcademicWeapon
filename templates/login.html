@@ -93,7 +93,7 @@
       </div>
       {% endif %}
 
-      {% if demo_mode %}
+      {% if local_login_enabled %}
       <div class="signin-divider"><span>or use a local demo account</span></div>
       <form action="/login" method="post" class="form-stack" id="loginForm">
         <label>
@@ -140,7 +140,7 @@
 
       <div class="login-disclaimer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:2px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        {% if demo_mode %}
+        {% if local_login_enabled %}
         <span><strong>Local prototype.</strong> Demo accounts use synthetic records. Real student records must stay in the separate protected database.</span>
         {% else %}
         <span><strong>Restricted access.</strong> Sign in only with your AUCA account. Student access is limited to the matching personal record.</span>
