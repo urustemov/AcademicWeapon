@@ -2645,31 +2645,6 @@ input::placeholder, textarea::placeholder {
   width: min(420px, 100%);
 }
 
-.login-theme-logo {
-  width: 220px;
-  height: 130px;
-  display: flex;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.login-theme-logo .aac-logo {
-  width: 100%;
-  height: 100%;
-}
-
-.theme-logo-dark {
-  display: none;
-}
-
-[data-theme='dark'] .theme-logo-light {
-  display: none;
-}
-
-[data-theme='dark'] .theme-logo-dark {
-  display: block;
-}
-
 .login-box h2 {
   font-size: 1.5rem;
   margin-bottom: 0.35rem;

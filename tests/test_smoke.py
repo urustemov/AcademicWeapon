@@ -29,8 +29,8 @@ def test_health_check_and_baseline_security_headers():
         assert login.headers['x-frame-options']=='DENY'
         assert login.headers['referrer-policy']=='strict-origin-when-cross-origin'
         assert login.headers['cache-control']=='no-store'
-        assert '/static/aac-logo-on-light.png' in login.text
         assert '/static/aac-logo-on-dark.png' in login.text
+        assert 'login-theme-logo' not in login.text
 
 
 def test_local_password_login_is_disabled_outside_demo(monkeypatch):
