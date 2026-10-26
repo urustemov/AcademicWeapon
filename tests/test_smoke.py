@@ -29,6 +29,8 @@ def test_health_check_and_baseline_security_headers():
         assert login.headers['x-frame-options']=='DENY'
         assert login.headers['referrer-policy']=='strict-origin-when-cross-origin'
         assert login.headers['cache-control']=='no-store'
+        assert '/static/aac-logo-on-light.png' in login.text
+        assert '/static/aac-logo-on-dark.png' in login.text
 
 
 def test_local_password_login_is_disabled_outside_demo(monkeypatch):
@@ -177,7 +179,8 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261023-3' in inbox.text
+        assert 'style.css?v=20261026-1' in inbox.text
+        assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
             '_csrf':csrf,'body':first_message,
@@ -410,7 +413,7 @@ def test_aac_and_student_permissions(monkeypatch):
     monkeypatch.setattr(
         app_module,
         'academic_now',
-        lambda: datetime(2026,10,23,18,0,tzinfo=app_module.ACADEMIC_TIMEZONE),
+        lambda: datetime(2026,10,30,18,0,tzinfo=app_module.ACADEMIC_TIMEZONE),
     )
     with TestClient(app, follow_redirects=False) as staff:
         assert staff.get('/login').status_code==200
@@ -493,7 +496,7 @@ def test_aac_and_student_permissions(monkeypatch):
         assert student.get('/student/deadlines').status_code==200
         checkin_page=student.get('/student/checkin')
         assert checkin_page.status_code==200
-        assert 'Friday Oct 23 at 17:00' in checkin_page.text
+        assert 'Friday Oct 30 at 17:00' in checkin_page.text
         assert 'Submit Weekly Check-in' in checkin_page.text
         assert student.get('/student/meetings').status_code==200
         assert student.get('/aac/students').status_code==403
