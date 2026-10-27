@@ -27,10 +27,25 @@ def test_health_check_and_baseline_security_headers():
         login=client.get('/login')
         assert login.headers['x-content-type-options']=='nosniff'
         assert login.headers['x-frame-options']=='DENY'
+        assert login.headers['x-permitted-cross-domain-policies']=='none'
+        assert login.headers['cross-origin-opener-policy']=='same-origin-allow-popups'
         assert login.headers['referrer-policy']=='strict-origin-when-cross-origin'
         assert login.headers['cache-control']=='no-store'
         assert '/static/aac-logo-on-dark.png' in login.text
         assert 'login-theme-logo' not in login.text
+
+
+def test_render_alias_redirects_to_the_official_domain(monkeypatch):
+    monkeypatch.setattr(app_module, 'IS_PRODUCTION', True)
+    monkeypatch.setattr(app_module, 'CANONICAL_HOST', 'advising.auca.kg')
+    monkeypatch.setattr(app_module, 'CANONICAL_ALIAS_HOSTS', {'testserver'})
+    with TestClient(app, follow_redirects=False) as client:
+        redirect = client.get('/login?error=inactive')
+        assert redirect.status_code == 308
+        assert redirect.headers['location'] == 'https://advising.auca.kg/login?error=inactive'
+        assert redirect.headers['x-content-type-options'] == 'nosniff'
+        health = client.get('/healthz')
+        assert health.status_code == 200
 
 
 def test_local_password_login_is_disabled_outside_demo(monkeypatch):

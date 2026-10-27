@@ -68,6 +68,11 @@ ALLOWED_HOSTS = [
 LOGIN_RATE_LIMIT = int(os.getenv('LOGIN_RATE_LIMIT', '20' if IS_PRODUCTION else '1000'))
 LOGIN_RATE_WINDOW_SECONDS = int(os.getenv('LOGIN_RATE_WINDOW_SECONDS', '900'))
 ACADEMIC_TIMEZONE = ZoneInfo(os.getenv('ACADEMIC_TIMEZONE', 'Asia/Bishkek'))
+CANONICAL_HOST = os.getenv('CANONICAL_HOST', '').strip().lower()
+CANONICAL_ALIAS_HOSTS = {
+    host.strip().lower() for host in os.getenv('CANONICAL_ALIAS_HOSTS', '').split(',')
+    if host.strip()
+}
 
 if IS_PRODUCTION:
     if DEMO_MODE:
@@ -78,6 +83,16 @@ if IS_PRODUCTION:
         raise RuntimeError('SESSION_COOKIE_SECURE must be enabled in production.')
     if not DB_PATH.is_absolute():
         raise RuntimeError('APSS_DB_PATH must be an absolute persistent path in production.')
+    if not CANONICAL_HOST:
+        raise RuntimeError('CANONICAL_HOST is required in production.')
+    if CANONICAL_HOST not in ALLOWED_HOSTS:
+        raise RuntimeError('CANONICAL_HOST must be included in ALLOWED_HOSTS.')
+    if not CANONICAL_ALIAS_HOSTS.issubset(set(ALLOWED_HOSTS)):
+        raise RuntimeError('Every CANONICAL_ALIAS_HOSTS entry must be included in ALLOWED_HOSTS.')
+    if not 300 <= SESSION_TTL_SECONDS <= 60 * 60 * 24:
+        raise RuntimeError('SESSION_TTL_SECONDS must be between 300 and 86400 in production.')
+    if LOGIN_RATE_LIMIT < 1 or LOGIN_RATE_WINDOW_SECONDS < 1:
+        raise RuntimeError('Login rate-limit settings must be positive in production.')
 
 session_secret = os.getenv('SESSION_SECRET', '').strip()
 if not session_secret:
@@ -106,11 +121,25 @@ templates = Jinja2Templates(directory=BASE_DIR / 'templates')
 
 @app.middleware('http')
 async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
+    request_host = (request.url.hostname or '').lower()
+    if (
+        IS_PRODUCTION
+        and CANONICAL_HOST
+        and request_host in CANONICAL_ALIAS_HOSTS
+        and request.url.path != '/healthz'
+    ):
+        target = f'https://{CANONICAL_HOST}{request.url.path}'
+        if request.url.query:
+            target = f'{target}?{request.url.query}'
+        response = RedirectResponse(target, status_code=308)
+    else:
+        response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Permitted-Cross-Domain-Policies'] = 'none'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'
     if not request.url.path.startswith('/static/'):
         response.headers['Cache-Control'] = 'no-store'
     if IS_PRODUCTION:

@@ -31,6 +31,7 @@ def connect():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.execute('PRAGMA foreign_keys = ON')
+    con.execute('PRAGMA busy_timeout = 5000')
     return con
 
 
@@ -67,6 +68,9 @@ def run(sql: str, params=()):
 def seed_database():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with connect() as con:
+        # WAL allows reads, writes, and SQLite's online backup API to coexist
+        # safely on the single-instance pilot service.
+        con.execute('PRAGMA journal_mode = WAL')
         con.executescript('''
         CREATE TABLE IF NOT EXISTS students (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

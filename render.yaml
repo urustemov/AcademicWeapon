@@ -28,7 +28,11 @@ services:
       - key: SESSION_TTL_SECONDS
         value: "43200"
       - key: ALLOWED_HOSTS
-        value: "*.onrender.com,advising.auca.kg"
+        value: "academic-weapon-staging.onrender.com,advising.auca.kg"
+      - key: CANONICAL_HOST
+        value: advising.auca.kg
+      - key: CANONICAL_ALIAS_HOSTS
+        value: academic-weapon-staging.onrender.com
       - key: LOGIN_RATE_LIMIT
         value: "20"
       - key: LOGIN_RATE_WINDOW_SECONDS
