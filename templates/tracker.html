@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}AAC Tracker{% endblock %}
+{% block crumb %}AAC Tracker{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow dark">ADVISING TEAM ONLY</div>
+    <h1>AAC Tracker</h1>
+    <p>Open the live advising visits, follow-ups, student records, and reports workspace.</p>
+  </div>
+  <a class="primary-btn" href="/aac/tracker/open" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">
+    Open AAC Tracker
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"></path><path d="M10 14L21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path></svg>
+  </a>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <span class="section-overline">SECURE GOOGLE WORKSPACE</span>
+      <h2>Live AAC workspace</h2>
+    </div>
+    <span class="status on-track">Advising Team</span>
+  </div>
+  <p>The Tracker opens in a separate tab and uses your AUCA Google account. Its information remains in the existing AAC Google workspace and is not copied into the student portal.</p>
+  <p class="small muted" style="margin-bottom: 0;">If Google asks you to sign in, select your <strong>@auca.kg</strong> account.</p>
+</section>
+{% endblock %}

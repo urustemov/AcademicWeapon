@@ -489,6 +489,45 @@ def test_only_advising_team_can_reassign_a_student_advisor():
     assert audit and 'Reassignment Advisor' in audit['event']
 
 
+def test_aac_tracker_is_available_only_to_advising_team():
+    tracker_url=app_module.AAC_TRACKER_URL
+    advisor_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('tracker.advisor@demo.example','Tracker Test Advisor','advisor',None,db.password_hash('Demo1234!')),
+    )
+    assert advisor_id
+
+    with TestClient(app,follow_redirects=False) as team:
+        assert team.post('/login',data={
+            'email':'advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        home=team.get('/aac')
+        assert home.status_code==200 and 'href="/aac/tracker"' in home.text
+        tracker=team.get('/aac/tracker')
+        assert tracker.status_code==200
+        assert 'Open AAC Tracker' in tracker.text
+        assert 'ADVISING TEAM ONLY' in tracker.text
+        launch=team.get('/aac/tracker/open')
+        assert launch.status_code==302
+        assert launch.headers['location']==tracker_url
+
+    with TestClient(app,follow_redirects=False) as advisor:
+        assert advisor.post('/login',data={
+            'email':'tracker.advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        home=advisor.get('/aac')
+        assert home.status_code==200 and 'href="/aac/tracker"' not in home.text
+        assert advisor.get('/aac/tracker').status_code==403
+        assert advisor.get('/aac/tracker/open').status_code==403
+
+    with TestClient(app,follow_redirects=False) as student:
+        assert student.post('/login',data={
+            'email':'student@demo.example','password':'Demo1234!',
+        }).status_code==303
+        assert 'href="/aac/tracker"' not in student.get('/student').text
+        assert student.get('/aac/tracker').status_code==403
+
+
 def test_aac_and_student_permissions(monkeypatch):
     monkeypatch.setattr(
         app_module,

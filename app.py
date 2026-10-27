@@ -73,6 +73,11 @@ CANONICAL_ALIAS_HOSTS = {
     host.strip().lower() for host in os.getenv('CANONICAL_ALIAS_HOSTS', '').split(',')
     if host.strip()
 }
+AAC_TRACKER_URL = os.getenv(
+    'AAC_TRACKER_URL',
+    'https://script.google.com/a/macros/auca.kg/s/'
+    'AKfycbz4T_jINuAElAm-fvtIRKtj1gVV5teevGL9D1u1dFb4RFJ0GDmkZHFXcf5HxA-52S0OEg/exec',
+).strip()
 
 if IS_PRODUCTION:
     if DEMO_MODE:
@@ -1415,6 +1420,20 @@ def aac_home(request:Request):
     open_followups=all_rows('SELECT student_id FROM followups WHERE status="Open"')
     stat={'students':len(students),'on_track':sum(s['status']=='On Track' for s in students),'followups':sum(f['student_id'] in visible_ids for f in open_followups),'review':sum(s['status']=='Needs Review' for s in students)}
     return page(request,'aac_home.html',active='aac_home',stat=stat,students=students,followups=recent,meetings=next_meetings,logs=log)
+
+
+@app.get('/aac/tracker')
+def aac_tracker(request:Request):
+    session=gate(request,'advising_team')
+    if not session:return bounce('/login')
+    return page(request,'tracker.html',active='aac_tracker')
+
+
+@app.get('/aac/tracker/open')
+def aac_tracker_open(request:Request):
+    session=gate(request,'advising_team')
+    if not session:return bounce('/login')
+    return RedirectResponse(AAC_TRACKER_URL,status_code=302)
 
 
 @app.get('/aac/students')
