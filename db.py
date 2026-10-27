@@ -416,7 +416,7 @@ def seed_database():
                 ('advising@auca.kg','Test Advisor','advisor',None,'!google-only!'),
             )
             con.execute(
-                "UPDATE students SET advisor='Test Advisor' WHERE LOWER(email)=LOWER(?)",
+                "UPDATE students SET advisor='Umut Kydyrgychova' WHERE LOWER(email)=LOWER(?)",
                 ('urustemov_se@auca.kg',),
             )
 
