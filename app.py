@@ -1624,6 +1624,14 @@ def aac_student_detail(student_id:int,request:Request):
     session=gate_staff(request)
     if not session:return bounce('/login')
     student=allowed_student(student_id,session)
+    advisor_options=[]
+    if session['user']['role']=='advising_team':
+        advisor_options=all_rows(
+            '''SELECT id,email,display_name,role FROM users
+               WHERE active=1 AND role IN ('advisor','advising_team')
+               ORDER BY CASE role WHEN 'advisor' THEN 0 ELSE 1 END,
+                        LOWER(display_name),id'''
+        )
     goals=all_rows('SELECT * FROM goals WHERE student_id=? ORDER BY id',(student_id,))
     tasks=all_rows('SELECT * FROM tasks WHERE student_id=? ORDER BY due_date',(student_id,))
     meetings=all_rows('SELECT * FROM meetings WHERE student_id=? ORDER BY date DESC',(student_id,))
@@ -1631,7 +1639,40 @@ def aac_student_detail(student_id:int,request:Request):
         meeting['can_edit']=can_edit_meeting(meeting,session['user'])
     followups=all_rows('SELECT * FROM followups WHERE student_id=? ORDER BY CASE WHEN status="Open" THEN 0 ELSE 1 END,due_date',(student_id,))
     checkins=all_rows('SELECT * FROM checkins WHERE student_id=? ORDER BY id DESC LIMIT 5',(student_id,))
-    return page(request,'student_detail.html',active='aac_students',student=student,goals=goals,tasks=tasks,meetings=meetings,followups=followups,checkins=checkins)
+    return page(
+        request,'student_detail.html',active='aac_students',student=student,
+        advisor_options=advisor_options,goals=goals,tasks=tasks,meetings=meetings,
+        followups=followups,checkins=checkins,
+    )
+
+
+@app.post('/aac/student/{student_id}/advisor')
+async def aac_update_student_advisor(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    if session['user']['role']!='advising_team':
+        raise HTTPException(403,'Only Advising Team members can change assigned advisors.')
+    form=await request.form();verify_csrf(request,session,form)
+    student=allowed_student(student_id,session)
+    try:
+        advisor_user_id=int(str(form.get('advisor_user_id','')))
+    except ValueError:
+        raise HTTPException(400,'Select a valid advisor.')
+    advisor=one(
+        '''SELECT id,display_name,role FROM users
+           WHERE id=? AND active=1 AND role IN ('advisor','advising_team')''',
+        (advisor_user_id,),
+    )
+    if not advisor:
+        raise HTTPException(400,'Select an active Advisor or Advising Team member.')
+    previous_advisor=student['advisor']
+    if previous_advisor.strip().casefold()!=advisor['display_name'].strip().casefold():
+        run('UPDATE students SET advisor=? WHERE id=?',(advisor['display_name'],student_id))
+        record(
+            session['user']['id'],
+            f'Reassigned student #{student_id} from {previous_advisor} to {advisor["display_name"]}',
+        )
+    return bounce(f'/aac/student/{student_id}#advisor-assignment')
 
 
 @app.get('/aac/student/{student_id}/schedule')

@@ -38,9 +38,26 @@
     <span>Credit Load</span>
     <strong>{{ student.credit_load }} credits</strong>
   </div>
-  <div>
+  <div id="advisor-assignment">
     <span>Assigned Advisor</span>
     <strong>{{ student.advisor }}</strong>
+    {% if user.role == 'advising_team' %}
+    <details class="advisor-assignment">
+      <summary>Change advisor</summary>
+      <form method="post" action="/aac/student/{{ student.id }}/advisor" class="advisor-assignment-form">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <label class="sr-only" for="advisor-user-{{ student.id }}">New assigned advisor</label>
+        <select id="advisor-user-{{ student.id }}" name="advisor_user_id" required>
+          {% for advisor in advisor_options %}
+          <option value="{{ advisor.id }}" {{ 'selected' if advisor.display_name|lower == student.advisor|lower else '' }}>
+            {{ advisor.display_name }}{% if advisor.role == 'advising_team' %} · Advising Team{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <button class="secondary-btn" type="submit">Save</button>
+      </form>
+    </details>
+    {% endif %}
   </div>
   <div>
     <span>Student Email</span>

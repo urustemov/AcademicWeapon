@@ -2406,6 +2406,35 @@ input::placeholder, textarea::placeholder {
   overflow-wrap: anywhere;
 }
 
+.advisor-assignment {
+  margin-top: 0.2rem;
+}
+
+.advisor-assignment summary {
+  width: fit-content;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 750;
+  list-style-position: inside;
+}
+
+.advisor-assignment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.advisor-assignment-form select {
+  min-width: 0;
+  width: 100%;
+}
+
+.advisor-assignment-form .secondary-btn {
+  padding-inline: 0.8rem;
+}
+
 /* Plans Directory Grid */
 .plan-index-grid {
   display: grid;
@@ -2952,6 +2981,14 @@ input::placeholder, textarea::placeholder {
 
   .profile-info {
     grid-template-columns: 1fr;
+  }
+
+  .advisor-assignment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .advisor-assignment-form .secondary-btn {
+    width: 100%;
   }
 
   .form-row {

@@ -32,6 +32,7 @@ def test_health_check_and_baseline_security_headers():
         assert login.headers['referrer-policy']=='strict-origin-when-cross-origin'
         assert login.headers['cache-control']=='no-store'
         assert '/static/aac-logo-on-dark.png' in login.text
+        assert '<link rel="icon" type="image/png" href="/static/aac-logo-on-light.png">' in login.text
         assert 'login-theme-logo' not in login.text
 
 
@@ -194,7 +195,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261026-1' in inbox.text
+        assert 'style.css?v=20261027-1' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -422,6 +423,70 @@ def test_activity_log_is_scoped_to_assigned_advisees_and_all_team_activity():
         assert activity.status_code==200
         assert task_title in activity.text
         assert 'Initiated by Mira Taylor' in activity.text
+
+
+def test_only_advising_team_can_reassign_a_student_advisor():
+    student_id=db.run('''INSERT INTO students
+        (student_code,name,email,program,year,gpa,credit_load,advisor,status,attention,avatar)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)''',(
+        'TEST-ADVISOR-CHANGE','Advisor Change Student','advisor.change.student@auca.kg',
+        'LAS',2,1.90,0,'AAC Advising Team','Initial Assessment','Regular','AC',
+    ))
+    replacement_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('replacement.advisor@demo.example','Reassignment Advisor','advisor',None,db.password_hash('Demo1234!')),
+    )
+    alternative_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('alternative.advisor@demo.example','Alternative Advisor','advisor',None,db.password_hash('Demo1234!')),
+    )
+    student_user_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('advisor.change.student@auca.kg','Advisor Change Student','student',student_id,db.password_hash('Demo1234!')),
+    )
+    assert student_id and replacement_id and alternative_id and student_user_id
+
+    with TestClient(app,follow_redirects=False) as team:
+        assert team.post('/login',data={
+            'email':'advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        profile=team.get(f'/aac/student/{student_id}')
+        assert profile.status_code==200
+        assert 'Change advisor' in profile.text
+        assert f'action="/aac/student/{student_id}/advisor"' in profile.text
+        assert 'Reassignment Advisor' in profile.text
+        csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
+        invalid=team.post(f'/aac/student/{student_id}/advisor',data={
+            '_csrf':csrf,'advisor_user_id':str(student_user_id),
+        })
+        assert invalid.status_code==400
+        changed=team.post(f'/aac/student/{student_id}/advisor',data={
+            '_csrf':csrf,'advisor_user_id':str(replacement_id),
+        })
+        assert changed.status_code==303
+        assert changed.headers['location']==f'/aac/student/{student_id}#advisor-assignment'
+        assert db.one('SELECT advisor FROM students WHERE id=?',(student_id,))['advisor']=='Reassignment Advisor'
+        assert 'Reassignment Advisor' in team.get(f'/aac/student/{student_id}').text
+
+    with TestClient(app,follow_redirects=False) as advisor:
+        assert advisor.post('/login',data={
+            'email':'replacement.advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        profile=advisor.get(f'/aac/student/{student_id}')
+        assert profile.status_code==200
+        assert 'Change advisor' not in profile.text
+        csrf=app_module.signer.loads(advisor.cookies['apss_demo_session'])['csrf']
+        forbidden=advisor.post(f'/aac/student/{student_id}/advisor',data={
+            '_csrf':csrf,'advisor_user_id':str(alternative_id),
+        })
+        assert forbidden.status_code==403
+        assert db.one('SELECT advisor FROM students WHERE id=?',(student_id,))['advisor']=='Reassignment Advisor'
+
+    audit=db.one(
+        'SELECT event FROM audit_logs WHERE event LIKE ? ORDER BY id DESC LIMIT 1',
+        (f'Reassigned student #{student_id}%',),
+    )
+    assert audit and 'Reassignment Advisor' in audit['event']
 
 
 def test_aac_and_student_permissions(monkeypatch):
