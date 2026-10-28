@@ -6,6 +6,7 @@ from pathlib import Path
 import secrets
 import logging
 import sqlite3
+import requests as external_requests
 from datetime import date, datetime, time, timedelta
 from time import monotonic
 from urllib.parse import quote
@@ -18,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.concurrency import run_in_threadpool
 
 
 BASE_PATH = Path(__file__).resolve().parent
@@ -73,11 +75,12 @@ CANONICAL_ALIAS_HOSTS = {
     host.strip().lower() for host in os.getenv('CANONICAL_ALIAS_HOSTS', '').split(',')
     if host.strip()
 }
-AAC_TRACKER_URL = os.getenv(
-    'AAC_TRACKER_URL',
-    'https://script.google.com/a/macros/auca.kg/s/'
+AAC_TRACKER_API_URL = os.getenv(
+    'AAC_TRACKER_API_URL',
+    'https://script.google.com/macros/s/'
     'AKfycbz4T_jINuAElAm-fvtIRKtj1gVV5teevGL9D1u1dFb4RFJ0GDmkZHFXcf5HxA-52S0OEg/exec',
 ).strip()
+AAC_TRACKER_API_KEY = os.getenv('AAC_TRACKER_API_KEY', '').strip()
 
 if IS_PRODUCTION:
     if DEMO_MODE:
@@ -269,6 +272,10 @@ ADVISING_TEAM_GROUP_EMAILS = frozenset({
     'zhakypov_a@auca.kg',
 })
 CASE_STATUSES = ('Initial Assessment', 'On Track', 'Needs Review')
+TRACKER_STATUS_OPTIONS = (
+    'Resolved','Pending','Waiting for Student','Waiting for Office','Closed',
+    "On student's decision",
+)
 
 
 def is_team_group_member(user):
@@ -532,6 +539,75 @@ def bounce(path):
 
 def record(uid,event):
     run('INSERT INTO audit_logs(user_id,event) VALUES (?,?)',(uid,event))
+
+
+def tracker_api_call(action,user,payload=None):
+    """Call the private Apps Script bridge without exposing its key to browsers."""
+    if not AAC_TRACKER_API_KEY:
+        raise HTTPException(503,'AAC Tracker connection is not configured yet.')
+    request_body={
+        'apiKey':AAC_TRACKER_API_KEY,
+        'action':str(action),
+        'actorEmail':user['email'],
+        'payload':payload or {},
+    }
+    try:
+        response=external_requests.post(
+            AAC_TRACKER_API_URL,json=request_body,timeout=(5,30),allow_redirects=True,
+            headers={'Accept':'application/json','User-Agent':'AcademicWeapon/1.0'},
+        )
+    except external_requests.RequestException as exc:
+        auth_logger.warning('AAC Tracker API request failed: %s',type(exc).__name__)
+        raise HTTPException(502,'AAC Tracker is temporarily unavailable. Please try again.')
+    if 'accounts.google.com' in response.url:
+        raise HTTPException(503,'AAC Tracker API deployment still requires interactive Google sign-in.')
+    try:
+        result=response.json()
+    except ValueError:
+        auth_logger.warning('AAC Tracker returned a non-JSON response with status %s',response.status_code)
+        raise HTTPException(502,'AAC Tracker returned an unexpected response.')
+    if response.status_code>=400:
+        raise HTTPException(502,'AAC Tracker could not complete the request.')
+    if not isinstance(result,dict) or not result.get('ok'):
+        message=str(result.get('error','AAC Tracker request failed.'))[:240] if isinstance(result,dict) else 'AAC Tracker request failed.'
+        raise HTTPException(400,message)
+    return result.get('data')
+
+
+def tracker_api_session(request):
+    session=gate(request,'advising_team')
+    if not session:
+        raise HTTPException(401,'Sign-in required.')
+    return session
+
+
+def clean_tracker_visit_payload(payload):
+    if not isinstance(payload,dict):
+        raise HTTPException(400,'Invalid visit data.')
+    topics=payload.get('topics',[])
+    if not isinstance(topics,list):
+        raise HTTPException(400,'Select at least one topic.')
+    cleaned={
+        'advisor':str(payload.get('advisor','')).strip()[:120],
+        'studentId':str(payload.get('studentId','')).strip()[:40],
+        'topics':[str(topic).strip()[:160] for topic in topics[:12] if str(topic).strip()],
+        'question':str(payload.get('question','')).strip()[:3000],
+        'action':str(payload.get('action','')).strip()[:3000],
+        'followUp':str(payload.get('followUp','No')).strip()[:20],
+        'followUpDate':str(payload.get('followUpDate','')).strip()[:20],
+        'status':str(payload.get('status','Resolved')).strip()[:80],
+        'notes':str(payload.get('notes','')).strip()[:5000],
+    }
+    if not cleaned['studentId'] or not cleaned['topics'] or not cleaned['question'] or not cleaned['action']:
+        raise HTTPException(400,'Student, topic, situation, and action are required.')
+    if cleaned['followUp'] not in {'Yes','No'}:
+        raise HTTPException(400,'Invalid follow-up selection.')
+    if cleaned['followUp']=='Yes' and not cleaned['followUpDate']:
+        raise HTTPException(400,'Follow-up date is required.')
+    if cleaned['followUpDate']:
+        try:date.fromisoformat(cleaned['followUpDate'])
+        except ValueError:raise HTTPException(400,'Enter a valid follow-up date.')
+    return cleaned
 
 
 def activity_rows(user, limit=50):
@@ -1426,14 +1502,94 @@ def aac_home(request:Request):
 def aac_tracker(request:Request):
     session=gate(request,'advising_team')
     if not session:return bounce('/login')
-    return page(request,'tracker.html',active='aac_tracker')
+    return page(
+        request,'tracker.html',active='aac_tracker',
+        tracker_configured=bool(AAC_TRACKER_API_KEY),
+    )
 
 
-@app.get('/aac/tracker/open')
-def aac_tracker_open(request:Request):
-    session=gate(request,'advising_team')
-    if not session:return bounce('/login')
-    return RedirectResponse(AAC_TRACKER_URL,status_code=302)
+@app.get('/aac/tracker/api/bootstrap')
+async def aac_tracker_bootstrap(request:Request):
+    session=tracker_api_session(request)
+    data=await run_in_threadpool(tracker_api_call,'bootstrap',session['user'],{})
+    return JSONResponse(data)
+
+
+@app.get('/aac/tracker/api/students')
+async def aac_tracker_students(request:Request,q:str=''):
+    session=tracker_api_session(request)
+    query=q.strip()[:120]
+    if not query:return JSONResponse([])
+    data=await run_in_threadpool(tracker_api_call,'searchStudents',session['user'],{'query':query})
+    return JSONResponse(data)
+
+
+@app.get('/aac/tracker/api/student/{student_code}')
+async def aac_tracker_student(student_code:str,request:Request):
+    session=tracker_api_session(request)
+    code=student_code.strip()[:40]
+    if not code:raise HTTPException(400,'Student ID is required.')
+    data=await run_in_threadpool(tracker_api_call,'getStudentProfile',session['user'],{'studentId':code})
+    return JSONResponse(data)
+
+
+@app.get('/aac/tracker/api/followups')
+async def aac_tracker_followups(request:Request,advisor:str='',bucket:str='all'):
+    session=tracker_api_session(request)
+    mode=bucket.strip().lower()
+    if mode not in {'all','overdue','today','next7','completed'}:
+        raise HTTPException(400,'Invalid follow-up filter.')
+    data=await run_in_threadpool(
+        tracker_api_call,'getFollowUps',session['user'],
+        {'advisor':advisor.strip()[:120],'bucket':mode},
+    )
+    return JSONResponse(data)
+
+
+@app.get('/aac/tracker/api/report')
+async def aac_tracker_report(
+    request:Request,from_date:str='',to_date:str='',advisor:str='',program:str='',status:str='',
+):
+    session=tracker_api_session(request)
+    for value in (from_date,to_date):
+        if value:
+            try:date.fromisoformat(value)
+            except ValueError:raise HTTPException(400,'Enter valid report dates.')
+    filters={
+        'from':from_date,'to':to_date,'advisor':advisor.strip()[:120],
+        'program':program.strip()[:120],'status':status.strip()[:80],
+    }
+    data=await run_in_threadpool(tracker_api_call,'getReport',session['user'],filters)
+    return JSONResponse(data)
+
+
+@app.post('/aac/tracker/api/visit')
+async def aac_tracker_save_visit(request:Request):
+    session=tracker_api_session(request)
+    verify_csrf(request,session,{'_csrf':request.headers.get('X-CSRF-Token','')})
+    try:payload=await request.json()
+    except ValueError:raise HTTPException(400,'Invalid visit data.')
+    cleaned=clean_tracker_visit_payload(payload)
+    data=await run_in_threadpool(tracker_api_call,'saveVisit',session['user'],cleaned)
+    record(session['user']['id'],f'Recorded AAC Tracker visit for student {cleaned["studentId"]}')
+    return JSONResponse(data)
+
+
+@app.post('/aac/tracker/api/visit/{row_number}/status')
+async def aac_tracker_update_visit_status(row_number:int,request:Request):
+    session=tracker_api_session(request)
+    verify_csrf(request,session,{'_csrf':request.headers.get('X-CSRF-Token','')})
+    if row_number<2:raise HTTPException(400,'Invalid Tracker row.')
+    try:payload=await request.json()
+    except ValueError:raise HTTPException(400,'Invalid status update.')
+    status=str(payload.get('status','')).strip() if isinstance(payload,dict) else ''
+    if status not in TRACKER_STATUS_OPTIONS:raise HTTPException(400,'Invalid Tracker status.')
+    data=await run_in_threadpool(
+        tracker_api_call,'updateVisitStatus',session['user'],
+        {'rowNumber':row_number,'status':status},
+    )
+    record(session['user']['id'],f'Updated AAC Tracker row {row_number} to {status}')
+    return JSONResponse(data)
 
 
 @app.get('/aac/students')

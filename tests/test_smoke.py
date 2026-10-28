@@ -195,7 +195,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261027-1' in inbox.text
+        assert 'style.css?v=20261027-2' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -489,8 +489,41 @@ def test_only_advising_team_can_reassign_a_student_advisor():
     assert audit and 'Reassignment Advisor' in audit['event']
 
 
-def test_aac_tracker_is_available_only_to_advising_team():
-    tracker_url=app_module.AAC_TRACKER_URL
+def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
+    calls=[]
+
+    def fake_tracker_call(action,user,payload=None):
+        calls.append((action,user['email'],payload or {}))
+        if action=='bootstrap':
+            return {
+                'currentUser':{'email':user['email'],'advisor':'Test Advisor','name':'Test Advisor'},
+                'advisors':['Test Advisor','Umut Kydyrgychova'],
+                'topics':['Academic Probation','Academic Progress'],
+                'statuses':list(app_module.TRACKER_STATUS_OPTIONS),
+                'programs':['LAS','SFW'],
+                'dashboard':{
+                    'today':2,'openFollowUps':3,'overdue':1,'next7':2,
+                    'byAdvisor':[{'label':'Test Advisor','value':2}],
+                    'byTopic':[{'label':'Academic Progress','value':2}],
+                    'recent':[],
+                },
+            }
+        if action=='searchStudents':
+            return [{'id':'54321','name':'Aibek Aibekov','email':'urustemov_se@auca.kg','program':'LAS','year':'1','gpa':'3.4'}]
+        if action=='getStudentProfile':
+            return {'student':{'id':'54321','name':'Aibek Aibekov','email':'urustemov_se@auca.kg','program':'LAS','year':'1','gpa':'3.4'},'visits':[]}
+        if action=='getFollowUps':
+            return []
+        if action=='getReport':
+            return {'total':0,'byProgram':[],'byYear':[],'byStatus':[],'gpaBands':[]}
+        if action=='saveVisit':
+            return {'ok':True,'row':25,'student':{'id':'54321','name':'Aibek Aibekov'}}
+        if action=='updateVisitStatus':
+            return {'ok':True}
+        raise AssertionError(f'Unexpected Tracker action: {action}')
+
+    monkeypatch.setattr(app_module,'AAC_TRACKER_API_KEY','test-private-key')
+    monkeypatch.setattr(app_module,'tracker_api_call',fake_tracker_call)
     advisor_id=db.run(
         'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
         ('tracker.advisor@demo.example','Tracker Test Advisor','advisor',None,db.password_hash('Demo1234!')),
@@ -505,11 +538,39 @@ def test_aac_tracker_is_available_only_to_advising_team():
         assert home.status_code==200 and 'href="/aac/tracker"' in home.text
         tracker=team.get('/aac/tracker')
         assert tracker.status_code==200
-        assert 'Open AAC Tracker' in tracker.text
+        assert 'data-tracker-root' in tracker.text
         assert 'ADVISING TEAM ONLY' in tracker.text
-        launch=team.get('/aac/tracker/open')
-        assert launch.status_code==302
-        assert launch.headers['location']==tracker_url
+        assert 'Dashboard' in tracker.text and 'New Visit' in tracker.text
+        assert 'script.google.com' not in tracker.text
+        assert '/static/tracker.js' in tracker.text
+        assert team.get('/aac/tracker/open').status_code==404
+
+        bootstrap=team.get('/aac/tracker/api/bootstrap')
+        assert bootstrap.status_code==200 and bootstrap.json()['dashboard']['today']==2
+        students=team.get('/aac/tracker/api/students?q=Aibek')
+        assert students.status_code==200 and students.json()[0]['id']=='54321'
+        profile=team.get('/aac/tracker/api/student/54321')
+        assert profile.status_code==200 and profile.json()['student']['name']=='Aibek Aibekov'
+        assert team.get('/aac/tracker/api/followups?bucket=invalid').status_code==400
+        assert team.get('/aac/tracker/api/followups?bucket=next7').status_code==200
+        assert team.get('/aac/tracker/api/report?from_date=not-a-date').status_code==400
+        assert team.get('/aac/tracker/api/report?program=LAS').status_code==200
+
+        csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
+        visit=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={
+            'advisor':'Test Advisor','studentId':'54321','topics':['Academic Progress'],
+            'question':'Review semester progress','action':'Agreed on next steps',
+            'followUp':'No','followUpDate':'','status':'Resolved','notes':'',
+        })
+        assert visit.status_code==200 and visit.json()['row']==25
+        assert team.post('/aac/tracker/api/visit',json={}).status_code==403
+        status=team.post('/aac/tracker/api/visit/25/status',headers={'X-CSRF-Token':csrf},json={'status':'Closed'})
+        assert status.status_code==200 and status.json()=={'ok':True}
+        assert ('saveVisit','advisor@demo.example',{
+            'advisor':'Test Advisor','studentId':'54321','topics':['Academic Progress'],
+            'question':'Review semester progress','action':'Agreed on next steps',
+            'followUp':'No','followUpDate':'','status':'Resolved','notes':'',
+        }) in calls
 
     with TestClient(app,follow_redirects=False) as advisor:
         assert advisor.post('/login',data={
@@ -518,7 +579,7 @@ def test_aac_tracker_is_available_only_to_advising_team():
         home=advisor.get('/aac')
         assert home.status_code==200 and 'href="/aac/tracker"' not in home.text
         assert advisor.get('/aac/tracker').status_code==403
-        assert advisor.get('/aac/tracker/open').status_code==403
+        assert advisor.get('/aac/tracker/api/bootstrap').status_code==403
 
     with TestClient(app,follow_redirects=False) as student:
         assert student.post('/login',data={
@@ -526,6 +587,7 @@ def test_aac_tracker_is_available_only_to_advising_team():
         }).status_code==303
         assert 'href="/aac/tracker"' not in student.get('/student').text
         assert student.get('/aac/tracker').status_code==403
+        assert student.get('/aac/tracker/api/bootstrap').status_code==403
 
 
 def test_aac_and_student_permissions(monkeypatch):

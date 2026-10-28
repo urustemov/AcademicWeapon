@@ -8,7 +8,7 @@
   <title>{% block title %}Academic Weapon{% endblock %} · AUCA Academic Advising Center</title>
   <link rel="icon" type="image/png" href="/static/aac-logo-on-light.png">
   <link rel="apple-touch-icon" href="/static/aac-logo-on-light.png">
-  <link rel="stylesheet" href="/static/style.css?v=20261027-1">
+  <link rel="stylesheet" href="/static/style.css?v=20261027-2">
   <script>
     (function() {
       try {
@@ -239,6 +239,7 @@
 {% else %}
 {% block auth %}{% endblock %}
 {% endif %}
+{% block scripts %}{% endblock %}
 <script src="/static/app.js?v=20261023-3" defer></script>
 </body>
 </html>

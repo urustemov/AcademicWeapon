@@ -39,6 +39,10 @@ services:
         value: "900"
       - key: ACADEMIC_TIMEZONE
         value: Asia/Bishkek
+      - key: AAC_TRACKER_API_URL
+        value: https://script.google.com/macros/s/AKfycbz4T_jINuAElAm-fvtIRKtj1gVV5teevGL9D1u1dFb4RFJ0GDmkZHFXcf5HxA-52S0OEg/exec
+      - key: AAC_TRACKER_API_KEY
+        sync: false
     disk:
       name: academic-weapon-data
       mountPath: /var/data

@@ -44,11 +44,18 @@ Production использует следующие переменные окру
 | `CANONICAL_HOST` | Единственный пользовательский домен | `render.yaml` |
 | `CANONICAL_ALIAS_HOSTS` | Технический Render-адрес для перенаправления | `render.yaml` |
 | `ACADEMIC_TIMEZONE=Asia/Bishkek` | Академический часовой пояс | `render.yaml` |
+| `AAC_TRACKER_API_URL` | URL утверждённого Apps Script deployment | `render.yaml` |
+| `AAC_TRACKER_API_KEY` | Общий секрет портала и Apps Script | Render Environment / Script Properties |
 
 `SESSION_SECRET`, рабочая SQLite-база, `.env` и исходные таблицы импорта не
 должны храниться в GitHub. Google Client ID не является паролем, но управляется
 как параметр окружения. Client Secret этому потоку Google Identity Services не
 требуется.
+
+`AAC_TRACKER_API_KEY` не включается в Git, HTML или JavaScript. Браузер его не
+получает: запросы к Google Sheet выполняет только сервер после проверки роли
+Advising Team. При подозрении на утечку значение меняется одновременно в
+Render Environment и Apps Script Properties.
 
 ## 3. DNS и HTTPS
 
@@ -85,6 +92,20 @@ Redirect URI должен совпадать с фактическим адре�
 минут. Локальные URI могут сохраняться только для контролируемой среды
 разработки.
 
+## 4.1. AAC Tracker и Google Sheet
+
+Нативная страница `/aac/tracker` доступна только роли `advising_team`. Она
+сохраняет существующую Google Sheet как источник данных, но не открывает Apps
+Script в браузере пользователя. Серверный мост устанавливается по инструкции
+`integrations/aac_tracker/README.md`.
+
+Apps Script Web App выполняется от имени владельца таблицы. Публичный endpoint
+не предоставляет доступ сам по себе: каждый запрос требует длинный секретный
+ключ и email из существующего `CONFIG.ALLOWED_USERS`. FastAPI дополнительно
+проверяет серверную сессию, роль и CSRF. При контрольной проверке нельзя
+создавать пробный визит в рабочей таблице; используются только чтение dashboard,
+поиск и отчёты.
+
 ## 5. Выпуск обновлений
 
 Стандартный цикл выпуска:
@@ -109,6 +130,8 @@ Redirect URI должен совпадать с фактическим адре�
 - Advisor видит только назначенных advisees.
 - Advising Team не получает доступ к приватным диалогам, в которых не участвует.
 - Групповой чат Advising Team доступен только четырём утверждённым аккаунтам.
+- AAC Tracker не виден Student и Advisor; Advising Team видит dashboard, поиск,
+  follow-ups и reports без перехода на внешний сайт.
 - Встречу может изменять только её владелец согласно роли.
 - Cookies имеют атрибуты `Secure`, `HttpOnly` и `SameSite=Lax`.
 - Ответы содержат HSTS, CSP, `X-Content-Type-Options` и `X-Frame-Options`.

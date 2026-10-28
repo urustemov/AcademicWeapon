@@ -2,27 +2,86 @@
 {% block title %}AAC Tracker{% endblock %}
 {% block crumb %}AAC Tracker{% endblock %}
 {% block content %}
-<div class="page-heading">
-  <div>
-    <div class="eyebrow dark">ADVISING TEAM ONLY</div>
-    <h1>AAC Tracker</h1>
-    <p>Open the live advising visits, follow-ups, student records, and reports workspace.</p>
-  </div>
-  <a class="primary-btn" href="/aac/tracker/open" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">
-    Open AAC Tracker
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"></path><path d="M10 14L21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path></svg>
-  </a>
-</div>
-
-<section class="panel">
-  <div class="panel-heading">
+<div class="tracker-root" data-tracker-root data-csrf="{{ csrf }}" data-configured="{{ '1' if tracker_configured else '0' }}">
+  <div class="page-heading tracker-heading">
     <div>
-      <span class="section-overline">SECURE GOOGLE WORKSPACE</span>
-      <h2>Live AAC workspace</h2>
+      <div class="eyebrow dark">ADVISING TEAM ONLY</div>
+      <h1>AAC Tracker</h1>
+      <p>Advising visits, student history, follow-ups, and reports linked to the live AAC spreadsheet.</p>
     </div>
-    <span class="status on-track">Advising Team</span>
+    <span class="outline-label"><span class="live-dot"></span><span data-tracker-connection>Connecting…</span></span>
   </div>
-  <p>The Tracker opens in a separate tab and uses your AUCA Google account. Its information remains in the existing AAC Google workspace and is not copied into the student portal.</p>
-  <p class="small muted" style="margin-bottom: 0;">If Google asks you to sign in, select your <strong>@auca.kg</strong> account.</p>
-</section>
+  <div class="tracker-alert" data-tracker-alert hidden role="alert"></div>
+
+  <nav class="tracker-tabs" aria-label="AAC Tracker sections">
+    <button class="active" type="button" data-tracker-tab="dashboard">Dashboard</button>
+    <button type="button" data-tracker-tab="new-visit">New Visit</button>
+    <button type="button" data-tracker-tab="students">Students</button>
+    <button type="button" data-tracker-tab="followups">Follow-ups</button>
+    <button type="button" data-tracker-tab="reports">Reports</button>
+  </nav>
+
+  <section class="tracker-view active" data-tracker-view="dashboard">
+    <div class="stats-grid four tracker-metrics">
+      <div class="stat-card"><span>Today</span><strong data-metric="today">—</strong><small>Visits</small></div>
+      <div class="stat-card"><span>Open Follow-ups</span><strong data-metric="openFollowUps">—</strong><small>Students</small></div>
+      <div class="stat-card"><span>Overdue</span><strong data-metric="overdue">—</strong><small>Students</small></div>
+      <div class="stat-card"><span>Next 7 Days</span><strong data-metric="next7">—</strong><small>Students</small></div>
+    </div>
+    <div class="two-columns tracker-dashboard-columns">
+      <section class="panel"><div class="panel-heading"><div><span class="section-overline">VISIT VOLUME</span><h2>Visits by Advisor</h2></div></div><div class="tracker-bars" data-advisor-bars></div></section>
+      <section class="panel"><div class="panel-heading"><div><span class="section-overline">COMMON REQUESTS</span><h2>Top Topics</h2></div></div><div class="tracker-ranked-list" data-topic-list></div></section>
+    </div>
+    <section class="panel section-margin"><div class="panel-heading"><div><span class="section-overline">LATEST ACTIVITY</span><h2>Recent Visits</h2></div></div><div class="tracker-table-wrap"><table class="tracker-table"><thead><tr><th>Date</th><th>Student</th><th>Program</th><th>Topic</th><th>Status</th></tr></thead><tbody data-recent-visits></tbody></table></div></section>
+  </section>
+
+  <section class="tracker-view" data-tracker-view="new-visit">
+    <section class="panel">
+      <div class="panel-heading"><div><span class="section-overline">STEP 1</span><h2>Find Student</h2></div></div>
+      <div class="tracker-search"><label class="sr-only" for="tracker-visit-search">Student ID, name, or email</label><input id="tracker-visit-search" type="search" placeholder="Student ID, name, or email" autocomplete="off" data-student-search="visit"><div class="tracker-search-results" data-search-results="visit" hidden></div></div>
+      <div class="tracker-selected-student" data-selected-student hidden></div>
+    </section>
+    <form class="panel section-margin tracker-visit-form" data-visit-form>
+      <div class="panel-heading"><div><span class="section-overline">STEP 2</span><h2>Advising Details</h2></div></div>
+      <div class="form-grid two-col">
+        <div class="form-field"><label for="tracker-advisor">Advisor *</label><select id="tracker-advisor" name="advisor" required data-visit-advisor></select></div>
+        <div class="form-field"><label for="tracker-status">Status *</label><select id="tracker-status" name="status" required data-visit-status></select></div>
+      </div>
+      <fieldset class="tracker-topic-fieldset"><legend>Topic *</legend><div class="tracker-topic-options" data-topic-options></div></fieldset>
+      <div class="form-grid two-col">
+        <div class="form-field"><label for="tracker-question">Situation / Question *</label><textarea id="tracker-question" name="question" required maxlength="3000"></textarea></div>
+        <div class="form-field"><label for="tracker-action">Action Taken *</label><textarea id="tracker-action" name="action" required maxlength="3000"></textarea></div>
+      </div>
+      <div class="form-grid three-col">
+        <div class="form-field"><label for="tracker-follow">Follow-up Required</label><select id="tracker-follow" name="followUp" data-followup-select><option>No</option><option>Yes</option></select></div>
+        <div class="form-field"><label for="tracker-follow-date">Follow-up Date</label><input id="tracker-follow-date" name="followUpDate" type="date" data-followup-date disabled></div>
+        <div class="form-field"><label for="tracker-notes">Notes</label><textarea id="tracker-notes" name="notes" maxlength="5000"></textarea></div>
+      </div>
+      <div class="tracker-form-actions"><button class="secondary-btn" type="reset">Clear</button><button class="primary-btn" type="submit">Save Visit</button></div>
+    </form>
+  </section>
+
+  <section class="tracker-view" data-tracker-view="students">
+    <section class="panel"><div class="panel-heading"><div><span class="section-overline">STUDENT DATABASE</span><h2>Find Student</h2></div></div><div class="tracker-search"><label class="sr-only" for="tracker-profile-search">Student ID, name, or email</label><input id="tracker-profile-search" type="search" placeholder="Student ID, name, or email" autocomplete="off" data-student-search="profile"><div class="tracker-search-results" data-search-results="profile" hidden></div></div></section>
+    <div data-student-profile hidden>
+      <section class="panel section-margin tracker-profile-summary" data-profile-summary></section>
+      <section class="panel section-margin"><div class="panel-heading"><div><span class="section-overline">ADVISING HISTORY</span><h2>Student Visits</h2></div><span class="count-bubble" data-profile-count>0</span></div><div class="tracker-table-wrap"><table class="tracker-table"><thead><tr><th>Date</th><th>Advisor</th><th>GPA</th><th>Topic</th><th>Situation</th><th>Action</th><th>Follow-up</th><th>Status</th></tr></thead><tbody data-profile-visits></tbody></table></div></section>
+    </div>
+  </section>
+
+  <section class="tracker-view" data-tracker-view="followups">
+    <section class="panel">
+      <div class="tracker-filter-row"><div class="tracker-filter-tabs" data-followup-tabs><button class="active" type="button" data-bucket="all">All</button><button type="button" data-bucket="overdue">Overdue</button><button type="button" data-bucket="today">Today</button><button type="button" data-bucket="next7">Next 7 Days</button><button type="button" data-bucket="completed">Completed</button></div><div class="form-field tracker-advisor-filter"><label for="tracker-followup-advisor">Advisor</label><select id="tracker-followup-advisor" data-followup-advisor></select></div></div>
+      <div class="tracker-table-wrap"><table class="tracker-table"><thead><tr><th>Due</th><th>Student</th><th>Program</th><th>Topic</th><th>Advisor</th><th>Status</th><th></th></tr></thead><tbody data-followup-body></tbody></table></div>
+    </section>
+  </section>
+
+  <section class="tracker-view" data-tracker-view="reports">
+    <section class="panel"><div class="panel-heading"><div><span class="section-overline">REPORT FILTERS</span><h2>Generate Report</h2></div></div><form class="tracker-report-form" data-report-form><div class="form-field"><label for="tracker-report-from">From</label><input id="tracker-report-from" name="from_date" type="date"></div><div class="form-field"><label for="tracker-report-to">To</label><input id="tracker-report-to" name="to_date" type="date"></div><div class="form-field"><label for="tracker-report-advisor">Advisor</label><select id="tracker-report-advisor" name="advisor" data-report-advisor></select></div><div class="form-field"><label for="tracker-report-program">Program</label><select id="tracker-report-program" name="program" data-report-program></select></div><div class="form-field"><label for="tracker-report-status">Status</label><select id="tracker-report-status" name="status" data-report-status></select></div><button class="primary-btn" type="submit">Generate</button></form></section>
+    <div class="tracker-report-grid section-margin"><div class="stack"><section class="panel"><div class="panel-heading"><div><span class="section-overline">PROGRAMS</span><h2>Visits by Program</h2></div></div><div class="tracker-bars compact" data-report-program-bars></div></section><section class="panel"><div class="panel-heading"><div><span class="section-overline">STUDY YEAR</span><h2>Visits by Year</h2></div></div><div class="tracker-bars compact" data-report-year-bars></div></section></div><section class="panel tracker-report-summary"><span class="section-overline">MATCHING VISITS</span><strong data-report-total>—</strong><span class="muted">Total records</span><h2>GPA Distribution</h2><div class="tracker-ranked-list" data-report-gpa></div></section></div>
+  </section>
+
+  <div class="tracker-toast" data-tracker-toast hidden role="status"></div>
+</div>
 {% endblock %}
+{% block scripts %}<script src="/static/tracker.js?v=20261027-1" defer></script>{% endblock %}
