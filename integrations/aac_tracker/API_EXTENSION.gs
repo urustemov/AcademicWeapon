@@ -35,7 +35,7 @@ function doPost(e) {
         data = updateVisitStatus(payload.rowNumber, payload.status);
         break;
       case 'getReport':
-        data = getReport(payload);
+        data = getPortalReport_(payload);
         break;
       default:
         throw new Error('Unknown AAC Tracker action.');
@@ -70,4 +70,38 @@ function getPortalActor_(rawEmail) {
 function portalJson_(value) {
   return ContentService.createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Extends the existing report with people-based metrics.
+ *
+ * Visit totals keep every matching log row. Unique-student totals collapse
+ * repeated rows by Student ID, using the latest matching row for program
+ * attribution so one person is never counted twice in the program chart.
+ */
+function getPortalReport_(filters) {
+  const report = getReport(filters);
+  filters = filters || {};
+  const from = filters.from ? startOfDay_(parseIsoDate_(filters.from)) : null;
+  const to = filters.to ? endOfDay_(parseIsoDate_(filters.to)) : null;
+  const uniqueByStudentId = {};
+
+  getLogRows_().filter(function(v) {
+    if (from && (!v.dateObj || v.dateObj < from)) return false;
+    if (to && (!v.dateObj || v.dateObj > to)) return false;
+    if (filters.advisor && filters.advisor !== 'All Advisors' && v.advisor !== filters.advisor) return false;
+    if (filters.program && filters.program !== 'All Programs' && v.program !== filters.program) return false;
+    if (filters.status && filters.status !== 'All Statuses' && v.status !== filters.status) return false;
+    return true;
+  }).forEach(function(v) {
+    const studentId = normalizeId_(v.studentId);
+    if (studentId) uniqueByStudentId[studentId] = v;
+  });
+
+  const uniqueRows = Object.keys(uniqueByStudentId).map(function(studentId) {
+    return uniqueByStudentId[studentId];
+  });
+  report.uniqueStudents = uniqueRows.length;
+  report.uniqueByProgram = countBy_(uniqueRows, 'program');
+  return report;
 }

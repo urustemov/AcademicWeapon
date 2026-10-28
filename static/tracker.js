@@ -243,7 +243,9 @@
       setLoading(true);
       const report = await api(`/aac/tracker/api/report?${params.toString()}`);
       root.querySelector('[data-report-total]').textContent = report.total ?? 0;
+      root.querySelector('[data-report-unique]').textContent = report.uniqueStudents ?? 0;
       renderBars(root.querySelector('[data-report-program-bars]'), report.byProgram || []);
+      renderBars(root.querySelector('[data-report-unique-program-bars]'), report.uniqueByProgram || []);
       renderBars(root.querySelector('[data-report-year-bars]'), report.byYear || []);
       renderRanked(root.querySelector('[data-report-gpa]'), report.gpaBands || []);
     } catch (error) { toast(error.message, true); }

@@ -195,7 +195,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261028-1' in inbox.text
+        assert 'style.css?v=20261028-2' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -515,7 +515,13 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         if action=='getFollowUps':
             return []
         if action=='getReport':
-            return {'total':0,'byProgram':[],'byYear':[],'byStatus':[],'gpaBands':[]}
+            return {
+                'total':3,'uniqueStudents':1,
+                'byProgram':[{'label':'LAS','value':3}],
+                'uniqueByProgram':[{'label':'LAS','value':1}],
+                'byYear':[{'label':'Year 1','value':3}],
+                'byStatus':[],'gpaBands':[],
+            }
         if action=='saveVisit':
             return {'ok':True,'row':25,'student':{'id':'54321','name':'Aibek Aibekov'}}
         if action=='updateVisitStatus':
@@ -541,6 +547,8 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert 'data-tracker-root' in tracker.text
         assert 'ADVISING TEAM ONLY' in tracker.text
         assert 'Dashboard' in tracker.text and 'New Visit' in tracker.text
+        assert 'Unique Student Visits' in tracker.text
+        assert 'Unique Students by Program' in tracker.text
         assert 'script.google.com' not in tracker.text
         assert '/static/tracker.js' in tracker.text
         assert team.get('/aac/tracker/open').status_code==404
@@ -554,7 +562,11 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert team.get('/aac/tracker/api/followups?bucket=invalid').status_code==400
         assert team.get('/aac/tracker/api/followups?bucket=next7').status_code==200
         assert team.get('/aac/tracker/api/report?from_date=not-a-date').status_code==400
-        assert team.get('/aac/tracker/api/report?program=LAS').status_code==200
+        report=team.get('/aac/tracker/api/report?program=LAS')
+        assert report.status_code==200
+        assert report.json()['total']==3
+        assert report.json()['uniqueStudents']==1
+        assert report.json()['uniqueByProgram']==[{'label':'LAS','value':1}]
 
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         visit=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={

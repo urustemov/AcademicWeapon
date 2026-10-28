@@ -3169,7 +3169,8 @@ input::placeholder, textarea::placeholder {
   width: 100%;
   min-height: 5px;
   border-radius: 8px 8px 2px 2px;
-  background: linear-gradient(180deg, var(--primary-400), var(--primary-600));
+  border: 1px solid color-mix(in srgb, var(--primary-500) 30%, transparent);
+  background: linear-gradient(180deg, var(--primary-500) 0%, var(--primary-200) 62%, #ffffff 100%);
 }
 
 [data-advisor-bars] .tracker-bar-item i {
@@ -3522,6 +3523,27 @@ input::placeholder, textarea::placeholder {
 .tracker-report-grid .stack {
   display: grid;
   gap: 1.25rem;
+}
+
+.tracker-report-metrics .stat-card:first-child {
+  border-color: var(--blue-border);
+  background: linear-gradient(135deg, var(--blue-soft), var(--panel));
+}
+
+.tracker-report-metrics .stat-card:last-child {
+  border-color: var(--green-border);
+  background: linear-gradient(135deg, var(--green-soft), var(--panel));
+}
+
+.tracker-chart-note {
+  margin: -0.3rem 0 0.3rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.tracker-bars-unique .tracker-bar-item i {
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: linear-gradient(180deg, var(--green) 0%, var(--green-border) 62%, #ffffff 100%);
 }
 
 .tracker-report-summary {
