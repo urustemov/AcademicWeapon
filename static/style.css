@@ -1389,13 +1389,14 @@ p {
 .goal-item {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .goal-card {
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  padding: 1rem;
+  padding: 1rem 3.7rem 1rem 1rem;
   background-color: var(--panel-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1430,21 +1431,45 @@ p {
 }
 
 .goal-edit-panel {
-  padding: 0.45rem 0.15rem 0;
+  padding: 0;
 }
 
 .goal-edit-panel summary {
+  align-items: center;
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
   color: var(--primary-600);
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 700;
+  display: inline-flex;
+  height: 2.15rem;
+  justify-content: center;
   list-style: none;
-  margin-left: auto;
-  width: fit-content;
+  position: absolute;
+  right: 0.8rem;
+  top: 0.8rem;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  width: 2.15rem;
+  z-index: 1;
+}
+
+.goal-edit-panel summary:hover,
+.goal-edit-panel summary:focus-visible,
+.goal-edit-panel[open] summary {
+  background-color: var(--primary-50);
+  border-color: var(--primary-500);
+  color: var(--primary-700);
 }
 
 [data-theme='dark'] .goal-edit-panel summary {
   color: var(--blue);
+}
+
+[data-theme='dark'] .goal-edit-panel summary:hover,
+[data-theme='dark'] .goal-edit-panel summary:focus-visible,
+[data-theme='dark'] .goal-edit-panel[open] summary {
+  background-color: rgba(59, 130, 246, 0.12);
+  border-color: rgba(96, 165, 250, 0.45);
 }
 
 .goal-edit-panel summary::-webkit-details-marker {

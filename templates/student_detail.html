@@ -111,7 +111,13 @@
             <span class="tag-soft">{{ goal.status }}</span>
           </div>
           <details class="goal-edit-panel">
-            <summary>Edit Academic Goal</summary>
+            <summary aria-label="Edit Academic Goal" title="Edit Academic Goal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
+              </svg>
+              <span class="sr-only">Edit Academic Goal</span>
+            </summary>
             <form method="post" action="/aac/student/{{ student.id }}/goal/{{ goal.id }}" class="form-stack inset-form">
               <input type="hidden" name="_csrf" value="{{ csrf }}">
               <div class="form-row">
