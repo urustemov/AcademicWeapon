@@ -1455,6 +1455,10 @@ p {
   margin-top: 0.65rem;
 }
 
+.goal-edit-panel .form-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .goal-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
