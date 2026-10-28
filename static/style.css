@@ -3105,6 +3105,26 @@ input::placeholder, textarea::placeholder {
   line-height: 1;
 }
 
+.tracker-metrics .stat-card:nth-child(1) {
+  border-color: var(--green-border);
+  background: linear-gradient(135deg, var(--green-soft), var(--panel));
+}
+
+.tracker-metrics .stat-card:nth-child(2) {
+  border-color: var(--amber-border);
+  background: linear-gradient(135deg, var(--amber-soft), var(--panel));
+}
+
+.tracker-metrics .stat-card:nth-child(3) {
+  border-color: var(--red-border);
+  background: linear-gradient(135deg, var(--red-soft), var(--panel));
+}
+
+.tracker-metrics .stat-card:nth-child(4) {
+  border-color: var(--blue-border);
+  background: linear-gradient(135deg, var(--blue-soft), var(--panel));
+}
+
 .tracker-dashboard-columns,
 .tracker-report-grid {
   align-items: stretch;
@@ -3150,6 +3170,11 @@ input::placeholder, textarea::placeholder {
   min-height: 5px;
   border-radius: 8px 8px 2px 2px;
   background: linear-gradient(180deg, var(--primary-400), var(--primary-600));
+}
+
+[data-advisor-bars] .tracker-bar-item i {
+  border: 1px solid color-mix(in srgb, var(--accent-500) 35%, transparent);
+  background: linear-gradient(180deg, var(--accent-500) 0%, var(--accent-200) 58%, #ffffff 100%);
 }
 
 .tracker-bar-item span {
