@@ -103,5 +103,6 @@ function getPortalReport_(filters) {
   });
   report.uniqueStudents = uniqueRows.length;
   report.uniqueByProgram = countBy_(uniqueRows, 'program');
+  report.uniqueByYear = countByYear_(uniqueRows);
   return report;
 }

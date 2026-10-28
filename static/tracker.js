@@ -247,6 +247,7 @@
       renderBars(root.querySelector('[data-report-program-bars]'), report.byProgram || []);
       renderBars(root.querySelector('[data-report-unique-program-bars]'), report.uniqueByProgram || []);
       renderBars(root.querySelector('[data-report-year-bars]'), report.byYear || []);
+      renderBars(root.querySelector('[data-report-unique-year-bars]'), report.uniqueByYear || []);
       renderRanked(root.querySelector('[data-report-gpa]'), report.gpaBands || []);
     } catch (error) { toast(error.message, true); }
     finally { setLoading(false); }

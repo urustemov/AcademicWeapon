@@ -3520,6 +3520,18 @@ input::placeholder, textarea::placeholder {
   gap: 1.25rem;
 }
 
+.tracker-report-metrics,
+.tracker-report-grid,
+.tracker-year-grid {
+  margin-top: 1.5rem;
+}
+
+.tracker-year-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
 .tracker-report-grid .stack {
   display: grid;
   gap: 1.25rem;
@@ -3606,7 +3618,8 @@ input::placeholder, textarea::placeholder {
 @media (max-width: 900px) {
   .tracker-metrics.stats-grid.four,
   .form-grid.three-col,
-  .tracker-report-grid {
+  .tracker-report-grid,
+  .tracker-year-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3626,6 +3639,7 @@ input::placeholder, textarea::placeholder {
   .form-grid.two-col,
   .form-grid.three-col,
   .tracker-report-grid,
+  .tracker-year-grid,
   .tracker-profile-facts {
     grid-template-columns: 1fr;
   }
