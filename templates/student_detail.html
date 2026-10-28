@@ -102,13 +102,34 @@
 
       <div class="goal-cards">
         {% for goal in goals %}
-        <div class="goal-card">
-          <span class="goal-spark">✦</span>
-          <div>
-            <strong>{{ goal.title }}</strong>
-            <span>{{ goal.target }}</span>
+        <div class="goal-item">
+          <div class="goal-card">
+            <span class="goal-spark">✦</span>
+            <div>
+              <strong>{{ goal.title }}</strong>
+            </div>
+            <span class="tag-soft">{{ goal.status }}</span>
           </div>
-          <span class="tag-soft">{{ goal.status }}</span>
+          <details class="goal-edit-panel">
+            <summary>Edit Academic Goal</summary>
+            <form method="post" action="/aac/student/{{ student.id }}/goal/{{ goal.id }}" class="form-stack inset-form">
+              <input type="hidden" name="_csrf" value="{{ csrf }}">
+              <div class="form-row">
+                <label>
+                  Goal Title
+                  <input name="title" value="{{ goal.title }}" maxlength="140" required>
+                </label>
+                <label>
+                  Status
+                  <select name="status" required>
+                    <option value="In Progress" {% if goal.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Completed" {% if goal.status == 'Completed' %}selected{% endif %}>Completed</option>
+                  </select>
+                </label>
+              </div>
+              <button type="submit" class="primary-btn">Save Changes</button>
+            </form>
+          </details>
         </div>
         {% else %}
         <div class="empty-state">No academic goals recorded yet.</div>
@@ -125,10 +146,6 @@
           <label>
             Goal Title
             <input name="title" maxlength="140" required placeholder="e.g. Strengthen semester GPA">
-          </label>
-          <label>
-            Target Metric / Behavior
-            <input name="target" maxlength="180" required placeholder="e.g. Reach GPA of 2.50 or attend 90% of seminars">
           </label>
           <button type="submit" class="primary-btn">Save Goal</button>
         </form>

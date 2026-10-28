@@ -1386,6 +1386,11 @@ p {
   gap: 0.75rem;
 }
 
+.goal-item {
+  display: flex;
+  flex-direction: column;
+}
+
 .goal-card {
   display: flex;
   align-items: flex-start;
@@ -1422,6 +1427,32 @@ p {
 .goal-card > div span {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.goal-edit-panel {
+  padding: 0.45rem 0.15rem 0;
+}
+
+.goal-edit-panel summary {
+  color: var(--primary-600);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  list-style: none;
+  margin-left: auto;
+  width: fit-content;
+}
+
+[data-theme='dark'] .goal-edit-panel summary {
+  color: var(--blue);
+}
+
+.goal-edit-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.goal-edit-panel .inset-form {
+  margin-top: 0.65rem;
 }
 
 .goal-grid {

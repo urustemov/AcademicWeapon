@@ -1941,10 +1941,25 @@ async def aac_add_goal(student_id:int,request:Request):
     if not session:return bounce('/login')
     form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
     title=str(form.get('title','')).strip()[:140]
-    target=str(form.get('target','')).strip()[:180]
-    if not title or not target:raise HTTPException(400,'Goal and target required')
-    run('INSERT INTO goals(student_id,title,target) VALUES (?,?,?)',(student_id,title,target))
+    if not title:raise HTTPException(400,'Goal title required')
+    run('INSERT INTO goals(student_id,title,target) VALUES (?,?,?)',(student_id,title,''))
     record(session['user']['id'],f'Created goal for student #{student_id}')
+    return bounce(f'/aac/student/{student_id}#goals')
+
+
+@app.post('/aac/student/{student_id}/goal/{goal_id}')
+async def aac_update_goal(student_id:int,goal_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form);allowed_student(student_id,session)
+    goal=one('SELECT id FROM goals WHERE id=? AND student_id=?',(goal_id,student_id))
+    if not goal:raise HTTPException(404,'Goal not found')
+    title=str(form.get('title','')).strip()[:140]
+    status=str(form.get('status','')).strip()
+    if not title:raise HTTPException(400,'Goal title required')
+    if status not in ('In Progress','Completed'):raise HTTPException(400,'Invalid goal status')
+    run('UPDATE goals SET title=?,status=? WHERE id=? AND student_id=?',(title,status,goal_id,student_id))
+    record(session['user']['id'],f'Updated goal #{goal_id} for student #{student_id}')
     return bounce(f'/aac/student/{student_id}#goals')
 
 
