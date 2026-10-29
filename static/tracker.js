@@ -249,6 +249,7 @@
       renderBars(root.querySelector('[data-report-year-bars]'), report.byYear || []);
       renderBars(root.querySelector('[data-report-unique-year-bars]'), report.uniqueByYear || []);
       renderRanked(root.querySelector('[data-report-gpa]'), report.gpaBands || []);
+      renderRanked(root.querySelector('[data-report-unique-gpa]'), report.uniqueGpaBands || []);
     } catch (error) { toast(error.message, true); }
     finally { setLoading(false); }
   }

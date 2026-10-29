@@ -521,7 +521,9 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
                 'uniqueByProgram':[{'label':'LAS','value':1}],
                 'byYear':[{'label':'Year 1','value':3}],
                 'uniqueByYear':[{'label':'Year 1','value':1}],
-                'byStatus':[],'gpaBands':[],
+                'byStatus':[],
+                'gpaBands':[{'label':'3.00–4.00','value':3}],
+                'uniqueGpaBands':[{'label':'3.00–4.00','value':1}],
             }
         if action=='saveVisit':
             return {'ok':True,'row':25,'student':{'id':'54321','name':'Aibek Aibekov'}}
@@ -552,6 +554,8 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert 'Unique Students by Program' in tracker.text
         assert 'Visits by Year' in tracker.text
         assert 'Unique Students by Year' in tracker.text
+        assert 'GPA Distribution by Unique Students' in tracker.text
+        assert 'tracker.js?v=20261029-1' in tracker.text
         assert 'script.google.com' not in tracker.text
         assert '/static/tracker.js' in tracker.text
         assert team.get('/aac/tracker/open').status_code==404
@@ -571,6 +575,7 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert report.json()['uniqueStudents']==1
         assert report.json()['uniqueByProgram']==[{'label':'LAS','value':1}]
         assert report.json()['uniqueByYear']==[{'label':'Year 1','value':1}]
+        assert report.json()['uniqueGpaBands']==[{'label':'3.00–4.00','value':1}]
 
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         visit=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={
