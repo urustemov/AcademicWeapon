@@ -80,6 +80,28 @@ AAC_TRACKER_API_URL = os.getenv(
     'https://script.google.com/macros/s/'
     'AKfycbz4T_jINuAElAm-fvtIRKtj1gVV5teevGL9D1u1dFb4RFJ0GDmkZHFXcf5HxA-52S0OEg/exec',
 ).strip()
+
+STAFF_GREETINGS = (
+    'Welcome back, {name}.',
+    'Hi, dear {name}.',
+    'How are you today, {name}?',
+    'Great to see you, {name}.',
+    'You look wonderful today, {name}.',
+    'You look sharp today, {name}.',
+    'Ready to make a difference, {name}?',
+    'Your energy is inspiring, {name}.',
+    'Keep up the wonderful work, {name}.',
+    'You make support feel personal, {name}.',
+    'Another bright day with you, {name}.',
+    'Your dedication stands out, {name}.',
+    'The team is stronger with you, {name}.',
+    "You've got this, {name}.",
+    "Here's to a productive day, {name}.",
+    'Your kindness makes a difference, {name}.',
+    'Nice to see you, {name}.',
+    "Let's make today count, {name}.",
+    'Your positive attitude shines, {name}.',
+)
 AAC_TRACKER_API_KEY = os.getenv('AAC_TRACKER_API_KEY', '').strip()
 
 if IS_PRODUCTION:
@@ -1484,6 +1506,8 @@ async def student_delete_deadline(deadline_id: int, request: Request):
 def aac_home(request:Request):
     session=gate_staff(request)
     if not session:return bounce('/login')
+    first_name=(session['user']['display_name'].strip().split() or ['there'])[0]
+    greeting=secrets.choice(STAFF_GREETINGS).format(name=first_name)
     scope,scope_params=staff_student_filter(session)
     students=all_rows('SELECT * FROM students WHERE active=1'+scope+' ORDER BY name',scope_params)
     scope_s,scope_s_params=staff_student_filter(session,'s')
@@ -1495,7 +1519,7 @@ def aac_home(request:Request):
     visible_ids={student['id'] for student in students}
     open_followups=all_rows('SELECT student_id FROM followups WHERE status="Open"')
     stat={'students':len(students),'on_track':sum(s['status']=='On Track' for s in students),'followups':sum(f['student_id'] in visible_ids for f in open_followups),'review':sum(s['status']=='Needs Review' for s in students)}
-    return page(request,'aac_home.html',active='aac_home',stat=stat,students=students,followups=recent,meetings=next_meetings,logs=log)
+    return page(request,'aac_home.html',active='aac_home',greeting=greeting,stat=stat,students=students,followups=recent,meetings=next_meetings,logs=log)
 
 
 @app.get('/aac/tracker')

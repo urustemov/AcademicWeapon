@@ -60,6 +60,20 @@ def test_local_password_login_is_disabled_outside_demo(monkeypatch):
         }).status_code==404
 
 
+def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
+    assert len(app_module.STAFF_GREETINGS) >= 15
+    monkeypatch.setattr(app_module.secrets, 'choice', lambda options: options[0])
+    with TestClient(app, follow_redirects=False) as client:
+        assert client.post('/login', data={
+            'email':'advisor@demo.example', 'password':'Demo1234!',
+        }).status_code == 303
+        overview = client.get('/aac')
+        assert overview.status_code == 200
+        assert 'data-staff-greeting' in overview.text
+        assert 'Welcome back, AAC.' in overview.text
+        assert 'style.css?v=20261029-1' in overview.text
+
+
 def test_private_chat_permissions_and_unread_state():
     advisor_body='<b>Can we review the private-chat test plan?</b>'
     student_body='Yes, private-chat test received.'
@@ -195,7 +209,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261028-7' in inbox.text
+        assert 'style.css?v=20261029-1' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
