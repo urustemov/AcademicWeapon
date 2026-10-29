@@ -95,7 +95,7 @@ def read_students(path: Path, sheet_name: str = DEFAULT_SHEET) -> list[StudentRe
             email = text(row[columns['email']]).lower()
             program = text(row[columns['program']])
             year = parse_year(row[columns['year']])
-            advisor = text(row[columns['advisor']])
+            advisor = db.canonical_advisor_name(text(row[columns['advisor']]))
             try:
                 gpa = float(row[columns['gpa']])
             except (TypeError, ValueError):

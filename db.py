@@ -26,6 +26,23 @@ def env_flag(name: str, default: bool) -> bool:
 DB_PATH = Path(os.getenv('APSS_DB_PATH', str(BASE_DIR / 'apss_demo.sqlite3'))).expanduser()
 DEMO_MODE = env_flag('APSS_DEMO_MODE', True)
 
+ADVISOR_NAME_UPDATES = (
+    ('Karabaev Daniyar', 'Daniyar Karabaev'),
+    ('Mary Cond', 'Mary Conde'),
+    ('Mirko Tasic', 'Mirko Tasić'),
+    ('Seiitbekova Begaiym', 'Begaiym Seiitbekova'),
+    ('Srdjan Uljevic', 'Srdjan Uljević'),
+    ('Zamira Muratalieva', 'Nargiza Muratalieva'),
+)
+ADVISOR_NAME_CORRECTIONS = {
+    old_name.casefold(): new_name for old_name, new_name in ADVISOR_NAME_UPDATES
+}
+
+
+def canonical_advisor_name(name: str) -> str:
+    cleaned = str(name or '').strip()
+    return ADVISOR_NAME_CORRECTIONS.get(cleaned.casefold(), cleaned)
+
 
 def connect():
     con = sqlite3.connect(DB_PATH)
@@ -360,31 +377,31 @@ def seed_database():
                 ('Akylai Muktarbek kyzy', 'muktarbek_a@auca.kg'),
                 ('Nazgul Jenish', 'jenish_n@auca.kg'),
                 ('Gorkem Atsungur', 'atsungur_g@auca.kg'),
-                ('Zamira Muratalieva', 'muratalieva_z@auca.kg'),
+                ('Nargiza Muratalieva', 'muratalieva_z@auca.kg'),
                 ('Aida Aidarova', 'aidarova_a@auca.kg'),
                 ('Nathaniel Matala', 'matala_n@auca.kg'),
-                ('Mirko Tasic', 'tasic_m@auca.kg'),
+                ('Mirko Tasić', 'tasic_m@auca.kg'),
                 ('Christopher Baker', 'baker_ch@auca.kg'),
                 ('Azim Jeenbaev', 'jeenbaev_a@auca.kg'),
                 ('Kanykei Kasybekova', 'kasybekova_k@auca.kg'),
                 ('Bholenath Dutta', 'dutta_b@auca.kg'),
                 ('Kamila Mateeva', 'mateeva_k@auca.kg'),
                 ('Asanbaeva Dinara', 'asanbaeva_d@auca.kg'),
-                ('Seiitbekova Begaiym', 'seiitbekova_be@auca.kg'),
-                ('Karabaev Daniyar', 'karabaev_d@auca.kg'),
+                ('Begaiym Seiitbekova', 'seiitbekova_be@auca.kg'),
+                ('Daniyar Karabaev', 'karabaev_d@auca.kg'),
                 ('Kangeldieva Janna', 'kangeldieva_j@auca.kg'),
                 ('Elena Chigibaeva', 'chigibaeva_e@auca.kg'),
                 ('Daniiar Usenov', 'usenov_d@auca.kg'),
                 ('Uulkan Kambaralieva', 'kambaralieva_u@auca.kg'),
                 ('Mohira Suyarkulova', 'suyarkulova_m@auca.kg'),
                 ('Galina Gorborukova', 'gorborukova_g@auca.kg'),
-                ('Srdjan Uljevic', 'uljevic_s@auca.kg'),
+                ('Srdjan Uljević', 'uljevic_s@auca.kg'),
                 ('Sagynbek Orunbaev', 'orunbaev_s@auca.kg'),
                 ('Gulzat Esenalieva', 'esenalieva_gu@auca.kg'),
                 ('Aijamal Sarybaeva', 'sarybaeva_a@auca.kg'),
                 ('Lyubov Altynnikova', 'altynnikova_l@auca.kg'),
                 ('Elvira Kushbekova', 'kushbekova_e@auca.kg'),
-                ('Mary Cond', 'conde_m@auca.kg'),
+                ('Mary Conde', 'conde_m@auca.kg'),
                 ('Sultan Usuvaliev', 'usuvaliev_s@auca.kg'),
                 ('Zhumanazar Koychubekov', 'koichubekov_zh@auca.kg'),
                 ('Kanykei Orozoeva', 'orozoeva_k@auca.kg'),
@@ -405,6 +422,20 @@ def seed_database():
                      active=1''',
                 ((email,name) for name,email in advisor_accounts),
             )
+            for old_name,new_name in ADVISOR_NAME_UPDATES:
+                con.execute(
+                    '''UPDATE users SET display_name=?
+                       WHERE role='advisor' AND LOWER(display_name)=LOWER(?)''',
+                    (new_name,old_name),
+                )
+                con.execute(
+                    'UPDATE students SET advisor=? WHERE LOWER(advisor)=LOWER(?)',
+                    (new_name,old_name),
+                )
+                con.execute(
+                    'UPDATE meetings SET advisor=? WHERE LOWER(advisor)=LOWER(?)',
+                    (new_name,old_name),
+                )
             con.execute(
                 '''INSERT INTO users(email,display_name,role,student_id,password_hash,active)
                    VALUES (?,?,?,?,?,1)
