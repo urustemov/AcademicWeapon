@@ -41,6 +41,8 @@ def test_advisor_names_are_canonicalized_during_import(tmp_path):
     make_workbook(source,first_advisor='Karabaev Daniyar')
     records=read_students(source)
     assert records[0].advisor=='Daniyar Karabaev'
+    assert db.canonical_advisor_name('Gorkem Atsungur')=='Görkem Atsungur'
+    assert db.canonical_advisor_name('Kangeldieva Janna')=='Janna Kangeldieva'
 
 
 def test_synchronize_creates_google_only_accounts_in_separate_database(tmp_path):
@@ -106,5 +108,11 @@ def test_seed_migrates_existing_advisor_names(tmp_path):
             assert connection.execute(
                 'SELECT display_name FROM users WHERE email=?',('conde_m@auca.kg',)
             ).fetchone()['display_name']=='Mary Conde'
+            assert connection.execute(
+                'SELECT display_name FROM users WHERE email=?',('atsungur_g@auca.kg',)
+            ).fetchone()['display_name']=='Görkem Atsungur'
+            assert connection.execute(
+                'SELECT display_name FROM users WHERE email=?',('kangeldieva_j@auca.kg',)
+            ).fetchone()['display_name']=='Janna Kangeldieva'
     finally:
         db.DB_PATH,db.DEMO_MODE=original_path,original_mode

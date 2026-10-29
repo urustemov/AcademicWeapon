@@ -62,6 +62,9 @@ def test_local_password_login_is_disabled_outside_demo(monkeypatch):
 
 def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
     assert len(app_module.STAFF_GREETINGS) >= 15
+    assert app_module.staff_greeting_name({
+        'email':'atsungur_g@auca.kg', 'display_name':'Görkem Atsungur',
+    }) == 'Görkem Bey'
     monkeypatch.setattr(app_module.secrets, 'choice', lambda options: options[0])
     with TestClient(app, follow_redirects=False) as client:
         assert client.post('/login', data={

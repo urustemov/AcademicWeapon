@@ -33,6 +33,8 @@ ADVISOR_NAME_UPDATES = (
     ('Seiitbekova Begaiym', 'Begaiym Seiitbekova'),
     ('Srdjan Uljevic', 'Srdjan Uljević'),
     ('Zamira Muratalieva', 'Nargiza Muratalieva'),
+    ('Gorkem Atsungur', 'Görkem Atsungur'),
+    ('Kangeldieva Janna', 'Janna Kangeldieva'),
 )
 ADVISOR_NAME_CORRECTIONS = {
     old_name.casefold(): new_name for old_name, new_name in ADVISOR_NAME_UPDATES
@@ -376,7 +378,7 @@ def seed_database():
                 ('Asel Kyrgyzbaeva', 'kyrgyzbaeva_a@auca.kg'),
                 ('Akylai Muktarbek kyzy', 'muktarbek_a@auca.kg'),
                 ('Nazgul Jenish', 'jenish_n@auca.kg'),
-                ('Gorkem Atsungur', 'atsungur_g@auca.kg'),
+                ('Görkem Atsungur', 'atsungur_g@auca.kg'),
                 ('Nargiza Muratalieva', 'muratalieva_z@auca.kg'),
                 ('Aida Aidarova', 'aidarova_a@auca.kg'),
                 ('Nathaniel Matala', 'matala_n@auca.kg'),
@@ -389,7 +391,7 @@ def seed_database():
                 ('Asanbaeva Dinara', 'asanbaeva_d@auca.kg'),
                 ('Begaiym Seiitbekova', 'seiitbekova_be@auca.kg'),
                 ('Daniyar Karabaev', 'karabaev_d@auca.kg'),
-                ('Kangeldieva Janna', 'kangeldieva_j@auca.kg'),
+                ('Janna Kangeldieva', 'kangeldieva_j@auca.kg'),
                 ('Elena Chigibaeva', 'chigibaeva_e@auca.kg'),
                 ('Daniiar Usenov', 'usenov_d@auca.kg'),
                 ('Uulkan Kambaralieva', 'kambaralieva_u@auca.kg'),

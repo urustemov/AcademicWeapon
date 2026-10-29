@@ -104,6 +104,12 @@ STAFF_GREETINGS = (
 )
 AAC_TRACKER_API_KEY = os.getenv('AAC_TRACKER_API_KEY', '').strip()
 
+
+def staff_greeting_name(user: dict) -> str:
+    if str(user.get('email','')).strip().casefold() == 'atsungur_g@auca.kg':
+        return 'Görkem Bey'
+    return (str(user.get('display_name','')).strip().split() or ['there'])[0]
+
 if IS_PRODUCTION:
     if DEMO_MODE:
         raise RuntimeError('APSS_DEMO_MODE must be 0 in production.')
@@ -1506,8 +1512,7 @@ async def student_delete_deadline(deadline_id: int, request: Request):
 def aac_home(request:Request):
     session=gate_staff(request)
     if not session:return bounce('/login')
-    first_name=(session['user']['display_name'].strip().split() or ['there'])[0]
-    greeting=secrets.choice(STAFF_GREETINGS).format(name=first_name)
+    greeting=secrets.choice(STAFF_GREETINGS).format(name=staff_greeting_name(session['user']))
     scope,scope_params=staff_student_filter(session)
     students=all_rows('SELECT * FROM students WHERE active=1'+scope+' ORDER BY name',scope_params)
     scope_s,scope_s_params=staff_student_filter(session,'s')
