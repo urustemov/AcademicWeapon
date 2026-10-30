@@ -40,6 +40,9 @@ ADVISOR_NAME_UPDATES = (
 ADVISOR_NAME_CORRECTIONS = {
     old_name.casefold(): new_name for old_name, new_name in ADVISOR_NAME_UPDATES
 }
+ADVISOR_EMAIL_UPDATES = (
+    ('jenish_n@auca.kg', 'jenish_na@auca.kg'),
+)
 
 
 def canonical_advisor_name(name: str) -> str:
@@ -367,6 +370,16 @@ def seed_database():
                      active=1''',
                 ((email,name) for name,email in advising_team_accounts),
             )
+            for old_email,new_email in ADVISOR_EMAIL_UPDATES:
+                con.execute(
+                    '''UPDATE users SET email=?
+                       WHERE LOWER(email)=LOWER(?)
+                         AND NOT EXISTS (
+                           SELECT 1 FROM users existing
+                           WHERE LOWER(existing.email)=LOWER(?)
+                         )''',
+                    (new_email,old_email,new_email),
+                )
             advisor_accounts = (
                 ('Elena Burova', 'burova_e@auca.kg'),
                 ('Taalaibek Imanaliev', 'imanaliev_t@auca.kg'),
@@ -379,7 +392,7 @@ def seed_database():
                 ('Nurbek Madmarov', 'madmarov_n@auca.kg'),
                 ('Asel Kyrgyzbaeva', 'kyrgyzbaeva_a@auca.kg'),
                 ('Akylai Muktarbek kyzy', 'muktarbek_a@auca.kg'),
-                ('Nazgul Jenish', 'jenish_n@auca.kg'),
+                ('Nazgul Jenish', 'jenish_na@auca.kg'),
                 ('Görkem Atsungur', 'atsungur_g@auca.kg'),
                 ('Nargiza Muratalieva', 'muratalieva_z@auca.kg'),
                 ('Aida Aidarova', 'aidarova_a@auca.kg'),

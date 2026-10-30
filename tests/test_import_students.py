@@ -97,6 +97,10 @@ def test_seed_migrates_existing_advisor_names(tmp_path):
                 'UPDATE users SET display_name=? WHERE email=?',
                 ('Mary Cond','conde_m@auca.kg'),
             )
+            connection.execute(
+                'UPDATE users SET email=? WHERE email=?',
+                ('jenish_n@auca.kg','jenish_na@auca.kg'),
+            )
 
         db.seed_database()
         with db.connect() as connection:
@@ -118,5 +122,11 @@ def test_seed_migrates_existing_advisor_names(tmp_path):
             assert connection.execute(
                 'SELECT display_name FROM users WHERE email=?',('asanbaeva_d@auca.kg',)
             ).fetchone()['display_name']=='Dinara Asanbaeva'
+            assert connection.execute(
+                'SELECT display_name FROM users WHERE email=?',('jenish_na@auca.kg',)
+            ).fetchone()['display_name']=='Nazgul Jenish'
+            assert connection.execute(
+                'SELECT COUNT(*) FROM users WHERE email=?',('jenish_n@auca.kg',)
+            ).fetchone()[0]==0
     finally:
         db.DB_PATH,db.DEMO_MODE=original_path,original_mode
