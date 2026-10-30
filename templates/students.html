@@ -73,7 +73,7 @@
           <th>Support Status</th>
           <th>Attention Level</th>
           <th>Last seen online</th>
-          <th style="text-align: right;">Action</th>
+          <th class="student-action-cell">Action</th>
         </tr>
       </thead>
       <tbody>
@@ -105,8 +105,8 @@
             {% set last_seen = s.last_seen_at|last_seen_label %}
             <span class="last-seen-value {{ 'online' if last_seen == 'Online now' else '' }}">{{ last_seen }}</span>
           </td>
-          <td style="text-align: right;">
-            <a href="/aac/student/{{ s.id }}" class="mini-btn">
+          <td class="student-action-cell">
+            <a href="/aac/student/{{ s.id }}" class="mini-btn student-action-button">
               <span>Open Profile</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
             </a>

@@ -2562,6 +2562,18 @@ input::placeholder, textarea::placeholder {
   box-shadow: 0 0 0 3px var(--green-soft);
 }
 
+.data-table .student-action-cell {
+  width: 1%;
+  min-width: 8.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.student-action-button {
+  min-width: 7.5rem;
+  white-space: nowrap;
+}
+
 .advisor-assignment {
   margin-top: 0.2rem;
 }

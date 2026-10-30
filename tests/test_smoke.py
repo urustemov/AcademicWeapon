@@ -77,7 +77,7 @@ def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
         assert overview.status_code == 200
         assert 'data-staff-greeting' in overview.text
         assert 'Welcome back, AAC.' in overview.text
-        assert 'style.css?v=20261030-1' in overview.text
+        assert 'style.css?v=20261030-2' in overview.text
 
 
 def test_student_last_seen_is_recorded_and_visible_only_to_staff():
@@ -101,6 +101,8 @@ def test_student_last_seen_is_recorded_and_visible_only_to_staff():
         directory=staff.get('/aac/students')
         assert directory.status_code==200
         assert 'Last seen online' in directory.text and 'Online now' in directory.text
+        assert 'student-action-cell' in directory.text
+        assert 'student-action-button' in directory.text
         profile=staff.get('/aac/student/1')
         assert profile.status_code==200
         assert 'Last seen online' in profile.text and 'Online now' in profile.text
@@ -241,7 +243,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261030-1' in inbox.text
+        assert 'style.css?v=20261030-2' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
