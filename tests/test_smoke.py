@@ -77,7 +77,7 @@ def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
         assert overview.status_code == 200
         assert 'data-staff-greeting' in overview.text
         assert 'Welcome back, AAC.' in overview.text
-        assert 'style.css?v=20261030-3' in overview.text
+        assert 'style.css?v=20261030-4' in overview.text
 
 
 def test_student_last_seen_is_recorded_and_visible_only_to_staff():
@@ -243,7 +243,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261030-3' in inbox.text
+        assert 'style.css?v=20261030-4' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -502,8 +502,21 @@ def test_only_advising_team_can_reassign_a_student_advisor():
         assert profile.status_code==200
         assert 'Change advisor' in profile.text
         assert f'action="/aac/student/{student_id}/advisor"' in profile.text
+        assert f'action="/aac/student/{student_id}/attention"' in profile.text
+        assert 'Update attention' in profile.text
+        assert all(level in profile.text for level in app_module.ATTENTION_LEVELS)
         assert 'Reassignment Advisor' in profile.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
+        invalid_attention=team.post(f'/aac/student/{student_id}/attention',data={
+            '_csrf':csrf,'attention':'Urgent',
+        })
+        assert invalid_attention.status_code==400
+        changed_attention=team.post(f'/aac/student/{student_id}/attention',data={
+            '_csrf':csrf,'attention':'Priority Attention',
+        })
+        assert changed_attention.status_code==303
+        assert changed_attention.headers['location']==f'/aac/student/{student_id}#attention-level'
+        assert db.one('SELECT attention FROM students WHERE id=?',(student_id,))['attention']=='Priority Attention'
         invalid=team.post(f'/aac/student/{student_id}/advisor',data={
             '_csrf':csrf,'advisor_user_id':str(student_user_id),
         })
@@ -523,7 +536,14 @@ def test_only_advising_team_can_reassign_a_student_advisor():
         profile=advisor.get(f'/aac/student/{student_id}')
         assert profile.status_code==200
         assert 'Change advisor' not in profile.text
+        assert f'action="/aac/student/{student_id}/attention"' not in profile.text
+        assert 'Only the Advising Team can change this level.' in profile.text
         csrf=app_module.signer.loads(advisor.cookies['apss_demo_session'])['csrf']
+        forbidden_attention=advisor.post(f'/aac/student/{student_id}/attention',data={
+            '_csrf':csrf,'attention':'Regular',
+        })
+        assert forbidden_attention.status_code==403
+        assert db.one('SELECT attention FROM students WHERE id=?',(student_id,))['attention']=='Priority Attention'
         forbidden=advisor.post(f'/aac/student/{student_id}/advisor',data={
             '_csrf':csrf,'advisor_user_id':str(alternative_id),
         })

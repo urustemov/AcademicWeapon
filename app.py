@@ -335,6 +335,11 @@ CASE_STATUSES = (
     'Academic Leave',
     'Dismissed',
 )
+ATTENTION_LEVELS = (
+    'Regular',
+    'Follow-up Needed',
+    'Priority Attention',
+)
 TRACKER_STATUS_OPTIONS = (
     'Resolved','Pending','Waiting for Student','Waiting for Office','Closed',
     "On student's decision",
@@ -467,6 +472,7 @@ templates.env.filters['initials'] = initials
 templates.env.filters['year_label'] = year_label
 templates.env.filters['last_seen_label'] = last_seen_label
 templates.env.globals['case_statuses'] = CASE_STATUSES
+templates.env.globals['attention_levels'] = ATTENTION_LEVELS
 
 
 def touch_student_last_seen(user):
@@ -2148,6 +2154,26 @@ async def aac_update_case_status(student_id:int,request:Request):
     run('UPDATE students SET status=? WHERE id=?',(status,student_id))
     record(session['user']['id'],f'Updated support case status for student #{student_id} to {status}')
     return bounce(f'/aac/student/{student_id}')
+
+
+@app.post('/aac/student/{student_id}/attention')
+async def aac_update_attention_level(student_id:int,request:Request):
+    session=gate_staff(request)
+    if not session:return bounce('/login')
+    if session['user']['role']!='advising_team':
+        raise HTTPException(403,'Only Advising Team members can change attention level.')
+    form=await request.form();verify_csrf(request,session,form)
+    student=allowed_student(student_id,session)
+    attention=str(form.get('attention','')).strip()
+    if attention not in ATTENTION_LEVELS:
+        raise HTTPException(400,'Invalid attention level')
+    if student['attention']!=attention:
+        run('UPDATE students SET attention=? WHERE id=?',(attention,student_id))
+        record(
+            session['user']['id'],
+            f'Updated attention level for student #{student_id} from {student["attention"]} to {attention}',
+        )
+    return bounce(f'/aac/student/{student_id}#attention-level')
 
 
 

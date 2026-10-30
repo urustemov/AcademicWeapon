@@ -93,6 +93,29 @@
         <button class="secondary-btn" type="submit">Update status</button>
       </form>
       <p class="small muted" style="margin-top: 0.5rem; margin-bottom: 0;">Advising case status is for internal AAC coordination and does not constitute an official university sanction.</p>
+
+      <div class="attention-level-editor" id="attention-level">
+        <div class="attention-level-heading">
+          <div>
+            <span class="section-overline">ATTENTION LEVEL</span>
+            <h3>Advising attention</h3>
+          </div>
+          <span class="attention {{ student.attention|lower|replace(' ', '-') }}">{{ student.attention }}</span>
+        </div>
+        {% if user.role == 'advising_team' %}
+        <form method="post" action="/aac/student/{{ student.id }}/attention" class="inline-edit">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <select name="attention" aria-label="Change attention level">
+            {% for opt in attention_levels %}
+            <option value="{{ opt }}" {{ 'selected' if opt == student.attention else '' }}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          <button class="secondary-btn" type="submit">Update attention</button>
+        </form>
+        {% else %}
+        <p class="small muted attention-level-readonly">Only the Advising Team can change this level.</p>
+        {% endif %}
+      </div>
     </section>
 
     <!-- Academic Goals -->

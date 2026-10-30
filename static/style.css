@@ -2605,6 +2605,30 @@ input::placeholder, textarea::placeholder {
   padding-inline: 0.8rem;
 }
 
+.attention-level-editor {
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 6rem;
+}
+
+.attention-level-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.attention-level-heading h3 {
+  margin: 0.12rem 0 0;
+  font-size: 1rem;
+}
+
+.attention-level-readonly {
+  margin: 0;
+}
+
 /* Plans Directory Grid */
 .plan-index-grid {
   display: grid;
