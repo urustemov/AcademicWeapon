@@ -63,6 +63,11 @@
     <span>Student Email</span>
     <strong>{{ student.email }}</strong>
   </div>
+  <div>
+    <span>Last seen online</span>
+    {% set last_seen = student.last_seen_at|last_seen_label %}
+    <strong class="last-seen-value {{ 'online' if last_seen == 'Online now' else '' }}">{{ last_seen }}</strong>
+  </div>
 </div>
 
 <div class="two-columns wide-left">

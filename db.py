@@ -109,7 +109,7 @@ def seed_database():
           id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL,
           display_name TEXT NOT NULL, role TEXT NOT NULL, student_id INTEGER,
           password_hash TEXT NOT NULL, google_sub TEXT,
-          active INTEGER NOT NULL DEFAULT 1,
+          active INTEGER NOT NULL DEFAULT 1, last_seen_at TEXT,
           FOREIGN KEY(student_id) REFERENCES students(id)
         );
         CREATE TABLE IF NOT EXISTS goals (
@@ -246,6 +246,8 @@ def seed_database():
             con.execute('ALTER TABLE users ADD COLUMN google_sub TEXT')
         if 'active' not in user_columns:
             con.execute('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
+        if 'last_seen_at' not in user_columns:
+            con.execute('ALTER TABLE users ADD COLUMN last_seen_at TEXT')
         con.execute("UPDATE users SET role='advising_team' WHERE role='aac'")
         staff_names = (
             ('Serdar Urustemov', 'urustemov_s@auca.kg'),

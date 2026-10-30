@@ -72,6 +72,7 @@
           <th>{% if demo_mode %}Demo GPA{% else %}CGPA{% endif %}</th>
           <th>Support Status</th>
           <th>Attention Level</th>
+          <th>Last seen online</th>
           <th style="text-align: right;">Action</th>
         </tr>
       </thead>
@@ -100,6 +101,10 @@
           <td>
             <span class="attention {{ s.attention|lower|replace(' ', '-') }}">{{ s.attention }}</span>
           </td>
+          <td>
+            {% set last_seen = s.last_seen_at|last_seen_label %}
+            <span class="last-seen-value {{ 'online' if last_seen == 'Online now' else '' }}">{{ last_seen }}</span>
+          </td>
           <td style="text-align: right;">
             <a href="/aac/student/{{ s.id }}" class="mini-btn">
               <span>Open Profile</span>
@@ -109,7 +114,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="6">
+          <td colspan="7">
             <div class="empty-state">No students found matching your criteria. Try adjusting or clearing the filters.</div>
           </td>
         </tr>

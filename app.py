@@ -235,6 +235,32 @@ def nice_datetime(value):
         return value or '—'
 
 
+def last_seen_label(value, now=None):
+    if not value:
+        return 'Never signed in'
+    try:
+        seen = datetime.fromisoformat(value)
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=ACADEMIC_TIMEZONE)
+        else:
+            seen = seen.astimezone(ACADEMIC_TIMEZONE)
+    except (TypeError, ValueError):
+        return 'Never signed in'
+    current = now or academic_now()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=ACADEMIC_TIMEZONE)
+    else:
+        current = current.astimezone(ACADEMIC_TIMEZONE)
+    elapsed = max(timedelta(0), current - seen)
+    if elapsed < timedelta(minutes=5):
+        return 'Online now'
+    if seen.date() == current.date():
+        return f'Today · {seen:%H:%M}'
+    if seen.date() == current.date() - timedelta(days=1):
+        return f'Yesterday · {seen:%H:%M}'
+    return seen.strftime('%b %d, %Y · %H:%M')
+
+
 def chat_updates_payload(messages, user_id):
     """Serialize chat rows for the live UI without exposing unrelated fields."""
     return {
@@ -439,7 +465,32 @@ templates.env.filters['nice_date'] = nice_date
 templates.env.filters['nice_datetime'] = nice_datetime
 templates.env.filters['initials'] = initials
 templates.env.filters['year_label'] = year_label
+templates.env.filters['last_seen_label'] = last_seen_label
 templates.env.globals['case_statuses'] = CASE_STATUSES
+
+
+def touch_student_last_seen(user):
+    if not user or user.get('role') != 'student':
+        return
+    now = academic_now()
+    previous = user.get('last_seen_at')
+    if previous:
+        try:
+            seen = datetime.fromisoformat(previous)
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=ACADEMIC_TIMEZONE)
+            else:
+                seen = seen.astimezone(ACADEMIC_TIMEZONE)
+            if now - seen < timedelta(minutes=1):
+                return
+        except (TypeError, ValueError):
+            pass
+    timestamp = now.isoformat(timespec='seconds')
+    run(
+        "UPDATE users SET last_seen_at=? WHERE id=? AND role='student'",
+        (timestamp,user['id']),
+    )
+    user['last_seen_at'] = timestamp
 
 
 def current_session(request):
@@ -450,8 +501,12 @@ def current_session(request):
         payload = signer.loads(cookie, max_age=SESSION_TTL_SECONDS)
         if not isinstance(payload, dict) or 'uid' not in payload:
             return None
-        user = one('SELECT id,email,display_name,role,student_id,active FROM users WHERE id=?', (payload['uid'],))
+        user = one(
+            'SELECT id,email,display_name,role,student_id,active,last_seen_at FROM users WHERE id=?',
+            (payload['uid'],),
+        )
         if user and user['active']:
+            touch_student_last_seen(user)
             return {'user':user,'csrf':payload.get('csrf','')}
     except BadSignature:
         return None
@@ -477,7 +532,13 @@ def gate_staff(request):
 
 
 def allowed_student(student_id, session):
-    student = one('SELECT * FROM students WHERE id=? AND active=1',(student_id,))
+    student = one(
+        '''SELECT s.*,
+             (SELECT MAX(u.last_seen_at) FROM users u
+              WHERE u.student_id=s.id AND u.role='student' AND u.active=1) AS last_seen_at
+           FROM students s WHERE s.id=? AND s.active=1''',
+        (student_id,),
+    )
     if not student:
         raise HTTPException(404,'Student not found')
     if (
@@ -1642,23 +1703,26 @@ def aac_students(
     session=gate_staff(request)
     if not session:return bounce('/login')
     if status not in CASE_STATUSES:status=''
-    scope,scope_params=staff_student_filter(session)
-    faculties=[row['program'] for row in all_rows('SELECT DISTINCT program FROM students WHERE active=1'+scope+' ORDER BY program COLLATE NOCASE',scope_params)]
-    years=[str(row['year']) for row in all_rows('SELECT DISTINCT year FROM students WHERE active=1'+scope+' ORDER BY year',scope_params)]
+    scope,scope_params=staff_student_filter(session,'s')
+    faculties=[row['program'] for row in all_rows('SELECT DISTINCT s.program FROM students s WHERE s.active=1'+scope+' ORDER BY s.program COLLATE NOCASE',scope_params)]
+    years=[str(row['year']) for row in all_rows('SELECT DISTINCT s.year FROM students s WHERE s.active=1'+scope+' ORDER BY s.year',scope_params)]
     if faculty not in faculties:faculty=''
     if year not in years:year=''
     if sort not in ('az','za'):sort='az'
-    query='SELECT * FROM students WHERE active=1'+scope;params=list(scope_params)
+    query='''SELECT s.*,
+             (SELECT MAX(u.last_seen_at) FROM users u
+              WHERE u.student_id=s.id AND u.role='student' AND u.active=1) AS last_seen_at
+             FROM students s WHERE s.active=1'''+scope;params=list(scope_params)
     if q:
-        query+=' AND (LOWER(name) LIKE ? OR LOWER(student_code) LIKE ? OR LOWER(program) LIKE ?)'
+        query+=' AND (LOWER(s.name) LIKE ? OR LOWER(s.student_code) LIKE ? OR LOWER(s.program) LIKE ?)'
         params += ['%'+q.lower()+'%']*3
     if status:
-        query+=' AND status=?';params.append(status)
+        query+=' AND s.status=?';params.append(status)
     if faculty:
-        query+=' AND program=?';params.append(faculty)
+        query+=' AND s.program=?';params.append(faculty)
     if year:
-        query+=' AND year=?';params.append(int(year))
-    query+=' ORDER BY name COLLATE NOCASE '+('DESC' if sort=='za' else 'ASC')
+        query+=' AND s.year=?';params.append(int(year))
+    query+=' ORDER BY s.name COLLATE NOCASE '+('DESC' if sort=='za' else 'ASC')
     students=all_rows(query,params)
     return page(
         request,'students.html',active='aac_students',students=students,

@@ -2501,7 +2501,7 @@ input::placeholder, textarea::placeholder {
 
 .profile-info {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   background-color: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -2530,6 +2530,36 @@ input::placeholder, textarea::placeholder {
   font-weight: 700;
   color: var(--text);
   overflow-wrap: anywhere;
+}
+
+.last-seen-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.last-seen-value::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 0.45rem;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.55;
+}
+
+.last-seen-value.online {
+  color: var(--green);
+}
+
+.last-seen-value.online::before {
+  background: var(--green);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--green-soft);
 }
 
 .advisor-assignment {
