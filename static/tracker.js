@@ -166,11 +166,15 @@
 
   const followSelect = root.querySelector('[data-followup-select]');
   const followDate = root.querySelector('[data-followup-date]');
-  followSelect.addEventListener('change', () => {
-    followDate.disabled = followSelect.value !== 'Yes';
-    followDate.required = followSelect.value === 'Yes';
+  function syncFollowUpDate() {
+    const followUpRequired = followSelect.value === 'Yes';
+    followDate.disabled = !followUpRequired;
+    followDate.required = followUpRequired;
+    followDate.setAttribute('aria-required', followUpRequired ? 'true' : 'false');
     if (followDate.disabled) followDate.value = '';
-  });
+  }
+  followSelect.addEventListener('change', syncFollowUpDate);
+  syncFollowUpDate();
 
   const visitForm = root.querySelector('[data-visit-form]');
   visitForm.addEventListener('reset', () => {
@@ -178,7 +182,7 @@
       selectedStudent = null;
       root.querySelector('[data-student-search="visit"]').value = '';
       root.querySelector('[data-selected-student]').hidden = true;
-      followDate.disabled = true;
+      syncFollowUpDate();
     }, 0);
   });
   visitForm.addEventListener('submit', async event => {
@@ -188,7 +192,7 @@
     const payload = {
       advisor:data.get('advisor'), studentId:selectedStudent.id,
       topics:data.getAll('topics'), question:data.get('question'), action:data.get('action'),
-      followUp:data.get('followUp'), followUpDate:data.get('followUpDate'),
+      followUp:data.get('followUp'), followUpDate:followSelect.value === 'Yes' ? (data.get('followUpDate') || '') : '',
       status:data.get('status'), notes:data.get('notes'),
     };
     try {

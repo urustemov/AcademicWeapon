@@ -603,7 +603,7 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert 'Visits by Year' in tracker.text
         assert 'Unique Students by Year' in tracker.text
         assert 'GPA Distribution by Unique Students' in tracker.text
-        assert 'tracker.js?v=20261029-1' in tracker.text
+        assert 'tracker.js?v=20261030-1' in tracker.text
         assert 'script.google.com' not in tracker.text
         assert '/static/tracker.js' in tracker.text
         assert team.get('/aac/tracker/open').status_code==404
@@ -632,6 +632,19 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
             'followUp':'No','followUpDate':'','status':'Resolved','notes':'',
         })
         assert visit.status_code==200 and visit.json()['row']==25
+        visit_without_date=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={
+            'advisor':'Test Advisor','studentId':'54321','topics':['Academic Progress'],
+            'question':'No follow-up needed','action':'Resolved during the visit',
+            'followUp':'No','followUpDate':None,'status':'Resolved','notes':'',
+        })
+        assert visit_without_date.status_code==200
+        visit_missing_required_date=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={
+            'advisor':'Test Advisor','studentId':'54321','topics':['Academic Progress'],
+            'question':'Follow-up is needed','action':'Agreed to meet again',
+            'followUp':'Yes','followUpDate':None,'status':'Waiting for Student','notes':'',
+        })
+        assert visit_missing_required_date.status_code==400
+        assert visit_missing_required_date.json()['detail']=='Follow-up date is required.'
         assert team.post('/aac/tracker/api/visit',json={}).status_code==403
         status=team.post('/aac/tracker/api/visit/25/status',headers={'X-CSRF-Token':csrf},json={'status':'Closed'})
         assert status.status_code==200 and status.json()=={'ok':True}

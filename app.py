@@ -692,7 +692,7 @@ def clean_tracker_visit_payload(payload):
         'question':str(payload.get('question','')).strip()[:3000],
         'action':str(payload.get('action','')).strip()[:3000],
         'followUp':str(payload.get('followUp','No')).strip()[:20],
-        'followUpDate':str(payload.get('followUpDate','')).strip()[:20],
+        'followUpDate':str(payload.get('followUpDate') or '').strip()[:20],
         'status':str(payload.get('status','Resolved')).strip()[:80],
         'notes':str(payload.get('notes','')).strip()[:5000],
     }
@@ -700,6 +700,8 @@ def clean_tracker_visit_payload(payload):
         raise HTTPException(400,'Student, topic, situation, and action are required.')
     if cleaned['followUp'] not in {'Yes','No'}:
         raise HTTPException(400,'Invalid follow-up selection.')
+    if cleaned['followUp']=='No':
+        cleaned['followUpDate']=''
     if cleaned['followUp']=='Yes' and not cleaned['followUpDate']:
         raise HTTPException(400,'Follow-up date is required.')
     if cleaned['followUpDate']:
