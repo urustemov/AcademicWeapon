@@ -2629,6 +2629,141 @@ input::placeholder, textarea::placeholder {
   margin: 0;
 }
 
+/* --------------------------------------------------------------------------
+   Advising Team Events
+   -------------------------------------------------------------------------- */
+.events-metrics {
+  margin-bottom: 1.5rem;
+}
+
+.event-create-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(145px, 1fr) 115px 115px minmax(120px, 1fr) minmax(130px, 1fr) auto;
+  align-items: end;
+  gap: 0.8rem;
+}
+
+.event-add-button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.events-table-heading {
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.events-help {
+  margin: -0.15rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.events-table {
+  min-width: 1120px;
+}
+
+.events-table th:last-child,
+.events-table td:last-child {
+  text-align: right;
+}
+
+.events-table td {
+  padding: 0.7rem 0.55rem;
+}
+
+.events-table tr:target td {
+  background: var(--primary-50);
+}
+
+[data-theme='dark'] .events-table tr:target td {
+  background: var(--blue-soft);
+}
+
+.event-name-column {
+  min-width: 285px;
+}
+
+.event-cell-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-strong, var(--border2));
+  border-radius: var(--radius-sm);
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+.event-cell-input:hover {
+  border-color: color-mix(in srgb, var(--border-focus) 50%, var(--border-strong));
+}
+
+.event-cell-input:focus {
+  border-color: var(--border-focus);
+  background: var(--panel);
+}
+
+.event-date-input {
+  min-width: 145px;
+}
+
+.event-room-input {
+  min-width: 105px;
+}
+
+.event-status-select {
+  min-width: 125px;
+  font-weight: 700;
+}
+
+.event-time-pair {
+  display: grid;
+  grid-template-columns: 105px auto 105px;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+.event-imported-note {
+  display: block;
+  margin: 0.28rem 0 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.event-action-cell {
+  width: 1%;
+  min-width: 88px;
+  white-space: nowrap;
+}
+
+.event-action-cell .secondary-btn {
+  min-height: 40px;
+  padding-inline: 0.9rem;
+}
+
+@media (max-width: 1250px) {
+  .event-create-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .event-create-name {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .event-create-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .event-create-name,
+  .event-add-button {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Plans Directory Grid */
 .plan-index-grid {
   display: grid;

@@ -44,6 +44,30 @@ ADVISOR_EMAIL_UPDATES = (
     ('jenish_n@auca.kg', 'jenish_na@auca.kg'),
 )
 
+# Best-effort transcription of the AAC events whiteboard. Seed keys keep the
+# import idempotent while leaving every field editable in the web interface.
+INITIAL_AAC_EVENTS = (
+    ('whiteboard-2026-01', "Peer Advisors' Training", '2026-08-18', '12:00', '13:30', 'G33', 'Done'),
+    ('whiteboard-2026-02', 'Academic Success Session', '2026-08-19', '16:00', '17:30', '222', 'Done'),
+    ('whiteboard-2026-03', '"Words that Work" Workshop', '2026-08-20', '14:10', '14:50', 'Forum', 'Done'),
+    ('whiteboard-2026-04', 'New Academic Advisors · Session 1', '2026-08-21', '15:00', '15:40', 'F; CH 410', 'Done'),
+    ('whiteboard-2026-05', 'New Academic Advisors · Session 2', '2026-08-21', '15:50', '16:30', 'CH 434, 435, 410', 'Done'),
+    ('whiteboard-2026-06', 'Online Advising Session 1', '2026-09-07', '11:00', '16:00', 'Zoom', 'Done'),
+    ('whiteboard-2026-07', 'Online Advising Session 2', '2026-09-08', '11:00', '16:00', 'Zoom', 'Done'),
+    ('whiteboard-2026-08', 'Online Advising Session 3', '2026-09-09', '11:00', '16:00', 'Zoom', 'Done'),
+    ('whiteboard-2026-09', 'Online Advising Session 4', '2026-09-10', '11:00', '16:00', 'Zoom', 'Done'),
+    ('whiteboard-2026-10', "Peer Advisors' Unity Retreat", '2026-09-26', '08:30', '16:00', 'Jannat', 'Done'),
+    ('whiteboard-2026-11', 'Study Cards Approval', '2026-09-27', '16:00', '', 'N/A', 'Done'),
+    ('whiteboard-2026-12', 'Study Like an AUCA Student: "Tips & Strategies"', '2026-10-06', '15:30', '16:45', '410', 'Done'),
+    ('whiteboard-2026-13', 'Family Advising Day', '2026-10-10', '12:00', '14:00', 'CH 440', 'Done'),
+    ('whiteboard-2026-14', 'Research Blueprint', '2026-10-14', '15:30', '16:45', '410', 'Done'),
+    ('whiteboard-2026-15', 'Presentation Skills Workshop', '2026-10-21', '15:30', '16:45', '306', 'Done'),
+    ('whiteboard-2026-16', 'Stress Management Workshop', '2026-10-28', '15:30', '16:45', '409', 'Done'),
+    ('whiteboard-2026-17', 'Internal Transfer Info Session', '2026-10-28', '12:05', '12:45', 'CH', 'Done'),
+    ('whiteboard-2026-18', 'Internal Transfer Fair', '2026-10-29', '12:05', '12:45', 'Forum', 'Done'),
+    ('whiteboard-2026-19', 'Research Blueprint: Beyond the Literature', '2026-11-04', '15:30', '16:45', '409', 'Planned'),
+)
+
 
 def canonical_advisor_name(name: str) -> str:
     cleaned = str(name or '').strip()
@@ -168,6 +192,21 @@ def seed_database():
           status TEXT NOT NULL DEFAULT 'Open',
           FOREIGN KEY(student_id) REFERENCES students(id)
         );
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          event_date TEXT NOT NULL,
+          start_time TEXT NOT NULL DEFAULT '',
+          end_time TEXT NOT NULL DEFAULT '',
+          room TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'Planned',
+          source_key TEXT UNIQUE,
+          created_by_user_id INTEGER,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+        );
+        CREATE INDEX IF NOT EXISTS events_date_idx ON events(event_date,id);
         CREATE TABLE IF NOT EXISTS deadlines (
           id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL,
           course TEXT NOT NULL, topic TEXT NOT NULL,
@@ -319,6 +358,13 @@ def seed_database():
         checkin_columns = {row[1] for row in con.execute('PRAGMA table_info(checkins)')}
         if 'week_key' not in checkin_columns:
             con.execute('ALTER TABLE checkins ADD COLUMN week_key TEXT')
+
+        con.executemany(
+            '''INSERT OR IGNORE INTO events
+               (source_key,title,event_date,start_time,end_time,room,status)
+               VALUES (?,?,?,?,?,?,?)''',
+            INITIAL_AAC_EVENTS,
+        )
 
         # Assign legacy submissions to their Monday-based academic week. If an
         # older installation allowed multiple submissions in one week, keep

@@ -77,7 +77,7 @@ def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
         assert overview.status_code == 200
         assert 'data-staff-greeting' in overview.text
         assert 'Welcome back, AAC.' in overview.text
-        assert 'style.css?v=20261030-4' in overview.text
+        assert 'style.css?v=20261030-5' in overview.text
 
 
 def test_student_last_seen_is_recorded_and_visible_only_to_staff():
@@ -243,7 +243,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261030-4' in inbox.text
+        assert 'style.css?v=20261030-5' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -555,6 +555,66 @@ def test_only_advising_team_can_reassign_a_student_advisor():
         (f'Reassigned student #{student_id}%',),
     )
     assert audit and 'Reassignment Advisor' in audit['event']
+
+
+def test_advising_team_can_manage_events_and_imported_whiteboard_rows():
+    advisor_id=db.run(
+        'INSERT INTO users(email,display_name,role,student_id,password_hash) VALUES (?,?,?,?,?)',
+        ('events.advisor@demo.example','Events Advisor','advisor',None,db.password_hash('Demo1234!')),
+    )
+    assert advisor_id
+
+    with TestClient(app,follow_redirects=False) as team:
+        assert team.post('/login',data={
+            'email':'advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        home=team.get('/aac')
+        assert 'href="/aac/events"' in home.text
+        page=team.get('/aac/events')
+        assert page.status_code==200
+        assert '19 imported from the whiteboard' in page.text
+        assert 'Research Blueprint: Beyond the Literature' in page.text
+        assert 'New Academic Advisors · Session 1' in page.text
+        assert 'Edit events' in page.text and 'Add an event' in page.text
+        csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
+        invalid=team.post('/aac/events',data={
+            '_csrf':csrf,'title':'Invalid time event','event_date':'2026-11-05',
+            'start_time':'15:00','end_time':'14:00','room':'410','status':'Planned',
+        })
+        assert invalid.status_code==400
+        created=team.post('/aac/events',data={
+            '_csrf':csrf,'title':'New Advising Workshop','event_date':'2026-11-05',
+            'start_time':'15:00','end_time':'16:00','room':'410','status':'Confirmed',
+        })
+        assert created.status_code==303
+        event=db.one('SELECT * FROM events WHERE title=?',('New Advising Workshop',))
+        assert event and created.headers['location']==f'/aac/events#event-{event["id"]}'
+        updated=team.post(f'/aac/events/{event["id"]}',data={
+            '_csrf':csrf,'title':'Updated Advising Workshop','event_date':'2026-11-06',
+            'start_time':'14:30','end_time':'16:15','room':'Forum','status':'Done',
+        })
+        assert updated.status_code==303
+        saved=db.one('SELECT * FROM events WHERE id=?',(event['id'],))
+        assert saved['title']=='Updated Advising Workshop'
+        assert saved['event_date']=='2026-11-06' and saved['room']=='Forum' and saved['status']=='Done'
+
+    with TestClient(app,follow_redirects=False) as advisor:
+        assert advisor.post('/login',data={
+            'email':'events.advisor@demo.example','password':'Demo1234!',
+        }).status_code==303
+        assert 'href="/aac/events"' not in advisor.get('/aac').text
+        assert advisor.get('/aac/events').status_code==403
+        csrf=app_module.signer.loads(advisor.cookies['apss_demo_session'])['csrf']
+        assert advisor.post('/aac/events',data={
+            '_csrf':csrf,'title':'Forbidden','event_date':'2026-11-07',
+            'start_time':'10:00','end_time':'11:00','room':'410','status':'Planned',
+        }).status_code==403
+
+    audit=db.one(
+        'SELECT event FROM audit_logs WHERE event LIKE ? ORDER BY id DESC LIMIT 1',
+        ('Updated event #%Updated Advising Workshop%',),
+    )
+    assert audit
 
 
 def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):

@@ -340,6 +340,12 @@ ATTENTION_LEVELS = (
     'Follow-up Needed',
     'Priority Attention',
 )
+EVENT_STATUSES = (
+    'Planned',
+    'Confirmed',
+    'Done',
+    'Cancelled',
+)
 TRACKER_STATUS_OPTIONS = (
     'Resolved','Pending','Waiting for Student','Waiting for Office','Closed',
     "On student's decision",
@@ -473,6 +479,7 @@ templates.env.filters['year_label'] = year_label
 templates.env.filters['last_seen_label'] = last_seen_label
 templates.env.globals['case_statuses'] = CASE_STATUSES
 templates.env.globals['attention_levels'] = ATTENTION_LEVELS
+templates.env.globals['event_statuses'] = EVENT_STATUSES
 
 
 def touch_student_last_seen(user):
@@ -714,6 +721,36 @@ def clean_tracker_visit_payload(payload):
         try:date.fromisoformat(cleaned['followUpDate'])
         except ValueError:raise HTTPException(400,'Enter a valid follow-up date.')
     return cleaned
+
+
+def clean_event_form(form):
+    title=str(form.get('title','')).strip()[:180]
+    event_date=str(form.get('event_date','')).strip()
+    start_time=str(form.get('start_time','')).strip()
+    end_time=str(form.get('end_time','')).strip()
+    room=str(form.get('room','')).strip()[:80]
+    status=str(form.get('status','')).strip()
+    if not title:
+        raise HTTPException(400,'Event name is required.')
+    try:
+        date.fromisoformat(event_date)
+    except ValueError:
+        raise HTTPException(400,'Enter a valid event date.')
+    if not start_time:
+        raise HTTPException(400,'Start time is required.')
+    try:
+        start_value=time.fromisoformat(start_time)
+        end_value=time.fromisoformat(end_time) if end_time else None
+    except ValueError:
+        raise HTTPException(400,'Enter valid event times.')
+    if end_value and end_value<=start_value:
+        raise HTTPException(400,'End time must be later than start time.')
+    if status not in EVENT_STATUSES:
+        raise HTTPException(400,'Select a valid event status.')
+    return {
+        'title':title,'event_date':event_date,'start_time':start_time,
+        'end_time':end_time,'room':room,'status':status,
+    }
 
 
 def activity_rows(user, limit=50):
@@ -1697,6 +1734,69 @@ async def aac_tracker_update_visit_status(row_number:int,request:Request):
     )
     record(session['user']['id'],f'Updated AAC Tracker row {row_number} to {status}')
     return JSONResponse(data)
+
+
+@app.get('/aac/events')
+def aac_events(request:Request):
+    session=gate(request,'advising_team')
+    if not session:return bounce('/login')
+    events=all_rows(
+        '''SELECT * FROM events
+           ORDER BY event_date DESC,start_time DESC,id DESC'''
+    )
+    return page(
+        request,'events.html',active='aac_events',events=events,
+        event_count=len(events),
+        upcoming_count=sum(
+            event['event_date']>=academic_now().date().isoformat()
+            and event['status'] not in {'Done','Cancelled'}
+            for event in events
+        ),
+        completed_count=sum(event['status']=='Done' for event in events),
+        imported_count=sum(bool(event['source_key']) for event in events),
+    )
+
+
+@app.post('/aac/events')
+async def aac_add_event(request:Request):
+    session=gate(request,'advising_team')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    event=clean_event_form(form)
+    event_id=run(
+        '''INSERT INTO events
+           (title,event_date,start_time,end_time,room,status,created_by_user_id,updated_at)
+           VALUES (?,?,?,?,?,?,?,?)''',
+        (
+            event['title'],event['event_date'],event['start_time'],event['end_time'],
+            event['room'],event['status'],session['user']['id'],
+            academic_now().isoformat(timespec='seconds'),
+        ),
+    )
+    record(session['user']['id'],f'Created event #{event_id}: {event["title"]}')
+    return bounce(f'/aac/events#event-{event_id}')
+
+
+@app.post('/aac/events/{event_id}')
+async def aac_update_event(event_id:int,request:Request):
+    session=gate(request,'advising_team')
+    if not session:return bounce('/login')
+    form=await request.form();verify_csrf(request,session,form)
+    existing=one('SELECT * FROM events WHERE id=?',(event_id,))
+    if not existing:
+        raise HTTPException(404,'Event not found.')
+    event=clean_event_form(form)
+    run(
+        '''UPDATE events
+           SET title=?,event_date=?,start_time=?,end_time=?,room=?,status=?,updated_at=?
+           WHERE id=?''',
+        (
+            event['title'],event['event_date'],event['start_time'],event['end_time'],
+            event['room'],event['status'],academic_now().isoformat(timespec='seconds'),event_id,
+        ),
+    )
+    record(session['user']['id'],f'Updated event #{event_id}: {event["title"]}')
+    return bounce(f'/aac/events#event-{event_id}')
 
 
 @app.get('/aac/students')
