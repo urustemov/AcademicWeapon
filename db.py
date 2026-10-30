@@ -35,6 +35,7 @@ ADVISOR_NAME_UPDATES = (
     ('Zamira Muratalieva', 'Nargiza Muratalieva'),
     ('Gorkem Atsungur', 'Görkem Atsungur'),
     ('Kangeldieva Janna', 'Janna Kangeldieva'),
+    ('Asanbaeva Dinara', 'Dinara Asanbaeva'),
 )
 ADVISOR_NAME_CORRECTIONS = {
     old_name.casefold(): new_name for old_name, new_name in ADVISOR_NAME_UPDATES
@@ -233,7 +234,8 @@ def seed_database():
         con.execute("UPDATE students SET status='Needs Review' WHERE status='Semester Review'")
         con.execute(
             "UPDATE students SET status='Initial Assessment' "
-            "WHERE status NOT IN ('Initial Assessment','On Track','Needs Review')"
+            "WHERE status NOT IN "
+            "('Initial Assessment','On Track','Needs Review','Academic Leave','Dismissed')"
         )
 
         user_columns = {row[1] for row in con.execute('PRAGMA table_info(users)')}
@@ -388,7 +390,7 @@ def seed_database():
                 ('Kanykei Kasybekova', 'kasybekova_k@auca.kg'),
                 ('Bholenath Dutta', 'dutta_b@auca.kg'),
                 ('Kamila Mateeva', 'mateeva_k@auca.kg'),
-                ('Asanbaeva Dinara', 'asanbaeva_d@auca.kg'),
+                ('Dinara Asanbaeva', 'asanbaeva_d@auca.kg'),
                 ('Begaiym Seiitbekova', 'seiitbekova_be@auca.kg'),
                 ('Daniyar Karabaev', 'karabaev_d@auca.kg'),
                 ('Janna Kangeldieva', 'kangeldieva_j@auca.kg'),

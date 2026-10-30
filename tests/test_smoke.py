@@ -705,6 +705,10 @@ def test_aac_and_student_permissions(monkeypatch):
         assert staff.post('/aac/student/1/followup',data={'_csrf':csrf,'title':'Test followup','due_date':'2026-11-01','priority':'High'}).status_code==303
         assert staff.post('/aac/student/1/status',data={'_csrf':csrf,'status':'Active Plan'}).status_code==400
         assert staff.post('/aac/student/1/status',data={'_csrf':csrf,'status':'On Track'}).status_code==303
+        assert staff.post('/aac/student/1/status',data={'_csrf':csrf,'status':'Academic Leave'}).status_code==303
+        assert db.one('SELECT status FROM students WHERE id=1')['status']=='Academic Leave'
+        assert staff.post('/aac/student/1/status',data={'_csrf':csrf,'status':'Dismissed'}).status_code==303
+        assert db.one('SELECT status FROM students WHERE id=1')['status']=='Dismissed'
         activity=staff.get('/aac/activity')
         assert activity.status_code==200
         assert 'Initiated by AAC Demo Advisor' in activity.text

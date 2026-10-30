@@ -299,7 +299,13 @@ ADVISING_TEAM_GROUP_EMAILS = frozenset({
     'tynyeva_a@auca.kg',
     'zhakypov_a@auca.kg',
 })
-CASE_STATUSES = ('Initial Assessment', 'On Track', 'Needs Review')
+CASE_STATUSES = (
+    'Initial Assessment',
+    'On Track',
+    'Needs Review',
+    'Academic Leave',
+    'Dismissed',
+)
 TRACKER_STATUS_OPTIONS = (
     'Resolved','Pending','Waiting for Student','Waiting for Office','Closed',
     "On student's decision",

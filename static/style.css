@@ -1947,6 +1947,30 @@ p {
   border: 1px solid var(--purple-border);
 }
 
+.status.academic-leave {
+  background-color: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.status.dismissed {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+[data-theme='dark'] .status.academic-leave {
+  background-color: #7c2d12;
+  color: #fed7aa;
+  border-color: #9a3412;
+}
+
+[data-theme='dark'] .status.dismissed {
+  background-color: #3f3f46;
+  color: #e4e4e7;
+  border-color: #52525b;
+}
+
 .status.semester-review {
   background-color: #f1f5f9;
   color: #475569;
