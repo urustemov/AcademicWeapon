@@ -106,8 +106,11 @@ AAC_TRACKER_API_KEY = os.getenv('AAC_TRACKER_API_KEY', '').strip()
 
 
 def staff_greeting_name(user: dict) -> str:
-    if str(user.get('email','')).strip().casefold() == 'atsungur_g@auca.kg':
+    email = str(user.get('email','')).strip().casefold()
+    if email == 'atsungur_g@auca.kg':
         return 'Görkem Bey'
+    if email == 'karabaev_d@auca.kg':
+        return 'Daniyar Agai'
     return (str(user.get('display_name','')).strip().split() or ['there'])[0]
 
 if IS_PRODUCTION:

@@ -65,6 +65,9 @@ def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
     assert app_module.staff_greeting_name({
         'email':'atsungur_g@auca.kg', 'display_name':'Görkem Atsungur',
     }) == 'Görkem Bey'
+    assert app_module.staff_greeting_name({
+        'email':'karabaev_d@auca.kg', 'display_name':'Daniyar Karabaev',
+    }) == 'Daniyar Agai'
     monkeypatch.setattr(app_module.secrets, 'choice', lambda options: options[0])
     with TestClient(app, follow_redirects=False) as client:
         assert client.post('/login', data={
