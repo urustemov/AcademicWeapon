@@ -77,7 +77,7 @@ def test_aac_overview_has_a_personalized_random_greeting(monkeypatch):
         assert overview.status_code == 200
         assert 'data-staff-greeting' in overview.text
         assert 'Welcome back, AAC.' in overview.text
-        assert 'style.css?v=20261030-5' in overview.text
+        assert 'style.css?v=20261030-6' in overview.text
 
 
 def test_student_last_seen_is_recorded_and_visible_only_to_staff():
@@ -243,7 +243,7 @@ def test_private_team_to_advisor_chat():
         assert inbox.text.count('data-message-search')==2
         assert 'Search by name or email' in inbox.text
         assert 'Search by name, student code, or department' in inbox.text
-        assert 'style.css?v=20261030-5' in inbox.text
+        assert 'style.css?v=20261030-6' in inbox.text
         assert '/static/aac-logo-on-dark.png' in inbox.text
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         assert team.post(f'/aac/staff-chat/{advisor_id}',data={
@@ -572,10 +572,18 @@ def test_advising_team_can_manage_events_and_imported_whiteboard_rows():
         assert 'href="/aac/events"' in home.text
         page=team.get('/aac/events')
         assert page.status_code==200
-        assert '19 imported from the whiteboard' in page.text
         assert 'Research Blueprint: Beyond the Literature' in page.text
         assert 'New Academic Advisors · Session 1' in page.text
-        assert 'Edit events' in page.text and 'Add an event' in page.text
+        assert 'Add Event' in page.text and 'event-edit-button' in page.text
+        assert 'Imported record' not in page.text
+        assert 'id="event-title-' not in page.text
+        add_page=team.get('/aac/events?add=1')
+        assert 'Add an event' in add_page.text
+        assert 'id="new-event-title"' in add_page.text
+        seeded=db.one('SELECT id FROM events WHERE source_key=?',('whiteboard-2026-19',))
+        edit_page=team.get(f'/aac/events?edit={seeded["id"]}')
+        assert f'id="event-title-{seeded["id"]}"' in edit_page.text
+        assert edit_page.text.count('id="event-title-')==1
         csrf=app_module.signer.loads(team.cookies['apss_demo_session'])['csrf']
         invalid=team.post('/aac/events',data={
             '_csrf':csrf,'title':'Invalid time event','event_date':'2026-11-05',

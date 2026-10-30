@@ -1737,9 +1737,14 @@ async def aac_tracker_update_visit_status(row_number:int,request:Request):
 
 
 @app.get('/aac/events')
-def aac_events(request:Request):
+def aac_events(request:Request,add:int=0,edit:int|None=None):
     session=gate(request,'advising_team')
     if not session:return bounce('/login')
+    editing_event=None
+    if edit is not None:
+        editing_event=one('SELECT * FROM events WHERE id=?',(edit,))
+        if not editing_event:
+            raise HTTPException(404,'Event not found.')
     events=all_rows(
         '''SELECT * FROM events
            ORDER BY event_date DESC,start_time DESC,id DESC'''
@@ -1753,7 +1758,7 @@ def aac_events(request:Request):
             for event in events
         ),
         completed_count=sum(event['status']=='Done' for event in events),
-        imported_count=sum(bool(event['source_key']) for event in events),
+        add_mode=bool(add),editing_event=editing_event,
     )
 
 

@@ -6,12 +6,16 @@
   <div>
     <div class="eyebrow dark">ADVISING TEAM CALENDAR</div>
     <h1>Events</h1>
-    <p>Plan AAC activities, keep rooms and times current, and update each event directly in the table.</p>
+    <p>Plan AAC activities and keep event details clear for the whole Advising Team.</p>
   </div>
-  <span class="outline-label">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><line x1="8" y1="2" x2="8" y2="6"></line><line x1="16" y1="2" x2="16" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-    <span>{{ event_count }} events</span>
-  </span>
+  {% if add_mode %}
+  <a class="secondary-btn" href="/aac/events">Cancel</a>
+  {% else %}
+  <a class="primary-btn" href="/aac/events?add=1#event-editor">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+    Add Event
+  </a>
+  {% endif %}
 </div>
 
 <div class="stats-grid three events-metrics">
@@ -20,7 +24,8 @@
   <div class="stat-card"><span>Completed</span><strong>{{ completed_count }}</strong><small>Marked done</small></div>
 </div>
 
-<section class="panel section-margin">
+{% if add_mode %}
+<section class="panel section-margin event-editor-panel" id="event-editor">
   <div class="panel-heading">
     <div>
       <span class="section-overline">NEW EVENT</span>
@@ -57,19 +62,23 @@
         {% endfor %}
       </select>
     </div>
-    <button class="primary-btn event-add-button" type="submit">Add Event</button>
+    <div class="event-form-actions">
+      <a class="secondary-btn" href="/aac/events">Cancel</a>
+      <button class="primary-btn event-add-button" type="submit">Add Event</button>
+    </div>
   </form>
 </section>
+{% endif %}
 
 <section class="panel section-margin">
   <div class="panel-heading events-table-heading">
     <div>
       <span class="section-overline">EVENT REGISTER</span>
-      <h2>Edit events</h2>
+      <h2>All events</h2>
     </div>
-    {% if imported_count %}<span class="tag-soft">{{ imported_count }} imported from the whiteboard</span>{% endif %}
+    <span class="outline-label">{{ event_count }} events</span>
   </div>
-  <p class="events-help">Edit any field in a row, then use its Save button. Imported handwriting may contain transcription inaccuracies.</p>
+  <p class="events-help">Select Edit only when you need to change a record.</p>
   <div class="table-scroll events-table-wrap">
     <table class="data-table events-table">
       <thead>
@@ -77,11 +86,11 @@
       </thead>
       <tbody>
         {% for event in events %}
-        <tr id="event-{{ event.id }}">
+        <tr id="event-{{ event.id }}" class="event-row event-row--{{ event.status|lower }} {{ 'event-row--editing' if editing_event and editing_event.id == event.id else '' }}">
+          {% if editing_event and editing_event.id == event.id %}
           <td class="event-name-column">
             <label class="sr-only" for="event-title-{{ event.id }}">Event name</label>
             <input id="event-title-{{ event.id }}" class="event-cell-input" form="event-form-{{ event.id }}" name="title" value="{{ event.title }}" maxlength="180" required>
-            {% if event.source_key %}<small class="event-imported-note">Imported record</small>{% endif %}
           </td>
           <td>
             <label class="sr-only" for="event-date-{{ event.id }}">Event date</label>
@@ -111,9 +120,27 @@
           <td class="event-action-cell">
             <form id="event-form-{{ event.id }}" method="post" action="/aac/events/{{ event.id }}">
               <input type="hidden" name="_csrf" value="{{ csrf }}">
-              <button class="secondary-btn" type="submit">Save</button>
+              <div class="event-row-actions">
+                <a class="secondary-btn" href="/aac/events#event-{{ event.id }}">Cancel</a>
+                <button class="primary-btn" type="submit">Save</button>
+              </div>
             </form>
           </td>
+          {% else %}
+          <td class="event-name-column"><strong class="event-name">{{ event.title }}</strong></td>
+          <td><span class="event-date">{{ event.event_date|nice_date }}</span></td>
+          <td>
+            <span class="event-time">{{ event.start_time }}{% if event.end_time %}–{{ event.end_time }}{% endif %}</span>
+          </td>
+          <td><span class="event-room">{{ event.room or '—' }}</span></td>
+          <td><span class="event-status event-status--{{ event.status|lower }}">{{ event.status }}</span></td>
+          <td class="event-action-cell">
+            <a class="secondary-btn event-edit-button" href="/aac/events?edit={{ event.id }}#event-{{ event.id }}" aria-label="Edit {{ event.title }}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              Edit
+            </a>
+          </td>
+          {% endif %}
         </tr>
         {% else %}
         <tr><td colspan="6"><div class="empty-state">No events yet. Add the first event above.</div></td></tr>
