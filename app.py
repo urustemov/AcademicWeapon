@@ -1,6 +1,7 @@
 """Academic Weapon FastAPI application."""
 from __future__ import annotations
 import os
+import re
 from collections import defaultdict, deque
 from pathlib import Path
 import secrets
@@ -731,6 +732,7 @@ def clean_tracker_visit_payload(payload):
     cleaned={
         'advisor':str(payload.get('advisor','')).strip()[:120],
         'studentId':str(payload.get('studentId','')).strip()[:40],
+        'studentName':str(payload.get('studentName','')).strip()[:160],
         'topics':[str(topic).strip()[:160] for topic in topics[:12] if str(topic).strip()],
         'question':str(payload.get('question','')).strip()[:3000],
         'action':str(payload.get('action','')).strip()[:3000],
@@ -783,6 +785,44 @@ def clean_event_form(form):
     }
 
 
+STUDENT_DB_ID_EVENT_RE = re.compile(r'\bstudent\s+#(?P<id>\d+)\b',re.IGNORECASE)
+STUDENT_CODE_EVENT_RE = re.compile(
+    r'\bstudent\s+(?!#)(?P<code>[A-Z0-9-]*\d[A-Z0-9-]*)\b',
+    re.IGNORECASE,
+)
+
+
+def display_activity_event(event, students_by_id, students_by_code):
+    """Replace internal student identifiers in audit text with the student's name."""
+    value=str(event or '')
+
+    def replace_database_id(match):
+        return students_by_id.get(match.group('id'),match.group(0))
+
+    def replace_student_code(match):
+        return students_by_code.get(match.group('code').casefold(),match.group(0))
+
+    value=STUDENT_DB_ID_EVENT_RE.sub(replace_database_id,value)
+    return STUDENT_CODE_EVENT_RE.sub(replace_student_code,value)
+
+
+def humanize_activity_rows(rows):
+    """Add student names to both current and legacy activity-log entries."""
+    students=all_rows('SELECT id,student_code,name FROM students')
+    students_by_id={
+        str(student['id']):student['name']
+        for student in students if str(student.get('name') or '').strip()
+    }
+    students_by_code={
+        str(student['student_code']).strip().casefold():student['name']
+        for student in students
+        if str(student.get('student_code') or '').strip() and str(student.get('name') or '').strip()
+    }
+    for row in rows:
+        row['event']=display_activity_event(row.get('event'),students_by_id,students_by_code)
+    return rows
+
+
 def activity_rows(user, limit=50):
     """Return the audit scope allowed for the current staff role."""
     select_sql = '''SELECT a.*,COALESCE(u.display_name,'Unknown user') AS actor_name,
@@ -792,14 +832,16 @@ def activity_rows(user, limit=50):
                     LEFT JOIN users u ON u.id=a.user_id
                     LEFT JOIN students s ON s.id=u.student_id'''
     if user['role'] == 'advising_team':
-        return all_rows(select_sql+' ORDER BY a.id DESC LIMIT ?',(limit,))
-    return all_rows(
-        select_sql+'''
-          WHERE a.user_id=?
-             OR (u.role='student' AND s.active=1 AND LOWER(s.advisor)=LOWER(?))
-          ORDER BY a.id DESC LIMIT ?''',
-        (user['id'],user['display_name'],limit),
-    )
+        rows=all_rows(select_sql+' ORDER BY a.id DESC LIMIT ?',(limit,))
+    else:
+        rows=all_rows(
+            select_sql+'''
+              WHERE a.user_id=?
+                 OR (u.role='student' AND s.active=1 AND LOWER(s.advisor)=LOWER(?))
+              ORDER BY a.id DESC LIMIT ?''',
+            (user['id'],user['display_name'],limit),
+        )
+    return humanize_activity_rows(rows)
 
 
 def refresh_credit_load(student_id):
@@ -1744,8 +1786,16 @@ async def aac_tracker_save_visit(request:Request):
     try:payload=await request.json()
     except ValueError:raise HTTPException(400,'Invalid visit data.')
     cleaned=clean_tracker_visit_payload(payload)
+    student_name=cleaned.pop('studentName','')
     data=await run_in_threadpool(tracker_api_call,'saveVisit',session['user'],cleaned)
-    record(session['user']['id'],f'Recorded AAC Tracker visit for student {cleaned["studentId"]}')
+    saved_student=data.get('student') if isinstance(data,dict) else None
+    if not student_name and isinstance(saved_student,dict):
+        student_name=str(saved_student.get('name','')).strip()[:160]
+    if not student_name:
+        local_student=one('SELECT name FROM students WHERE student_code=?',(cleaned['studentId'],))
+        student_name=local_student['name'] if local_student else ''
+    student_label=student_name or f'student {cleaned["studentId"]}'
+    record(session['user']['id'],f'Recorded AAC Tracker visit for {student_label}')
     return JSONResponse(data)
 
 

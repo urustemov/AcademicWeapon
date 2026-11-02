@@ -190,7 +190,7 @@
     if (!selectedStudent) { toast('Select a student first.', true); return; }
     const data = new FormData(visitForm);
     const payload = {
-      advisor:data.get('advisor'), studentId:selectedStudent.id,
+      advisor:data.get('advisor'), studentId:selectedStudent.id, studentName:selectedStudent.name,
       topics:data.getAll('topics'), question:data.get('question'), action:data.get('action'),
       followUp:data.get('followUp'), followUpDate:followSelect.value === 'Yes' ? (data.get('followUpDate') || '') : '',
       status:data.get('status'), notes:data.get('notes'),

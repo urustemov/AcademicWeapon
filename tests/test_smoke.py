@@ -437,6 +437,14 @@ def test_activity_log_is_scoped_to_assigned_advisees_and_all_team_activity():
     assert assigned_advisor_id and other_advisor_id and student_user_id
     db.run('UPDATE students SET advisor=? WHERE id=2',('Activity Advisor',))
     task_title='Advisee activity visibility test'
+    db.run(
+        'INSERT INTO audit_logs(user_id,event) VALUES (?,?)',
+        (assigned_advisor_id,'Updated support case status for student #2 to On Track'),
+    )
+    db.run(
+        'INSERT INTO audit_logs(user_id,event) VALUES (?,?)',
+        (assigned_advisor_id,'Recorded AAC Tracker visit for student DEMO-1002'),
+    )
 
     with TestClient(app,follow_redirects=False) as student:
         assert student.post('/login',data={
@@ -457,6 +465,10 @@ def test_activity_log_is_scoped_to_assigned_advisees_and_all_team_activity():
         assert task_title in activity.text
         assert 'Initiated by Mira Taylor' in activity.text
         assert 'Student' in activity.text and 'DEMO-1002' in activity.text
+        assert 'Updated support case status for Mira Taylor to On Track' in activity.text
+        assert 'Recorded AAC Tracker visit for Mira Taylor' in activity.text
+        assert 'student #2' not in activity.text
+        assert 'student DEMO-1002' not in activity.text
 
     with TestClient(app,follow_redirects=False) as other_advisor:
         assert other_advisor.post('/login',data={
@@ -696,7 +708,7 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
         assert 'Visits by Year' in tracker.text
         assert 'Unique Students by Year' in tracker.text
         assert 'GPA Distribution by Unique Students' in tracker.text
-        assert 'tracker.js?v=20261030-1' in tracker.text
+        assert 'tracker.js?v=20261102-1' in tracker.text
         assert 'script.google.com' not in tracker.text
         assert '/static/tracker.js' in tracker.text
         assert team.get('/aac/tracker/open').status_code==404
@@ -725,6 +737,11 @@ def test_aac_tracker_is_native_and_available_only_to_advising_team(monkeypatch):
             'followUp':'No','followUpDate':'','status':'Resolved','notes':'',
         })
         assert visit.status_code==200 and visit.json()['row']==25
+        tracker_audit=db.one(
+            'SELECT event FROM audit_logs WHERE event LIKE ? ORDER BY id DESC LIMIT 1',
+            ('Recorded AAC Tracker visit for %',),
+        )
+        assert tracker_audit['event']=='Recorded AAC Tracker visit for Aibek Aibekov'
         visit_without_date=team.post('/aac/tracker/api/visit',headers={'X-CSRF-Token':csrf},json={
             'advisor':'Test Advisor','studentId':'54321','topics':['Academic Progress'],
             'question':'No follow-up needed','action':'Resolved during the visit',
