@@ -30,7 +30,7 @@
     </div>
     <div>
       <strong>{{ log.event }}</strong>
-      <span>{{ log.created_at|nice_date }} · Initiated by {{ log.actor_name }} · {{ 'Student' if log.actor_role == 'student' else ('Advisor' if log.actor_role == 'advisor' else ('Advising Team' if log.actor_role == 'advising_team' else 'Unknown role')) }}{% if log.actor_student_code %} · {{ log.actor_student_code }}{% endif %}</span>
+      <span>{{ log.created_at|nice_activity_datetime }} · Initiated by {{ log.actor_name }} · {{ 'Student' if log.actor_role == 'student' else ('Advisor' if log.actor_role == 'advisor' else ('Advising Team' if log.actor_role == 'advising_team' else 'Unknown role')) }}{% if log.actor_student_code %} · {{ log.actor_student_code }}{% endif %}</span>
     </div>
   </div>
   {% else %}
