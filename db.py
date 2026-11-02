@@ -365,6 +365,7 @@ def seed_database():
                VALUES (?,?,?,?,?,?,?)''',
             INITIAL_AAC_EVENTS,
         )
+        con.execute("UPDATE events SET status='Planned' WHERE status='Confirmed'")
 
         # Assign legacy submissions to their Monday-based academic week. If an
         # older installation allowed multiple submissions in one week, keep
