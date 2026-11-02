@@ -244,6 +244,17 @@ def nice_datetime(value):
         return value or '—'
 
 
+def nice_activity_datetime(value):
+    """Display SQLite audit timestamps in the configured academic timezone."""
+    try:
+        recorded = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if recorded.tzinfo is None:
+            recorded = recorded.replace(tzinfo=ZoneInfo('UTC'))
+        return recorded.astimezone(ACADEMIC_TIMEZONE).strftime('%b %d, %Y · %H:%M')
+    except (TypeError, ValueError):
+        return value or '—'
+
+
 def last_seen_label(value, now=None):
     if not value:
         return 'Never signed in'
@@ -351,7 +362,6 @@ ATTENTION_LEVELS = (
 )
 EVENT_STATUSES = (
     'Planned',
-    'Confirmed',
     'Done',
     'Cancelled',
 )
@@ -493,6 +503,7 @@ def year_label(value):
 
 templates.env.filters['nice_date'] = nice_date
 templates.env.filters['nice_datetime'] = nice_datetime
+templates.env.filters['nice_activity_datetime'] = nice_activity_datetime
 templates.env.filters['initials'] = initials
 templates.env.filters['year_label'] = year_label
 templates.env.filters['last_seen_label'] = last_seen_label
