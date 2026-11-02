@@ -143,7 +143,11 @@
       {% if checkin_state.is_completed %}
       <p>Your reflection for this week is complete. The next Check-in opens {{ checkin_state.next_open_label }}.</p>
       {% elif checkin_state.is_open %}
+      {% if checkin_state.is_override %}
+      <p>Weekly Check-in is open for your account. Take two minutes to reflect and let your advisor know if you need support.</p>
+      {% else %}
       <p>The weekly window is open until Sunday at 23:59. Take two minutes to reflect and let your advisor know if you need support.</p>
+      {% endif %}
       {% else %}
       <p>Weekly Check-in opens {{ checkin_state.next_open_label }} and remains available through Sunday at 23:59.</p>
       {% endif %}

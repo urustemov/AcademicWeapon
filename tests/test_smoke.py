@@ -764,7 +764,7 @@ def test_aac_and_student_permissions(monkeypatch):
     monkeypatch.setattr(
         app_module,
         'academic_now',
-        lambda: datetime(2026,10,30,18,0,tzinfo=app_module.ACADEMIC_TIMEZONE),
+        lambda: datetime(2026,11,6,18,0,tzinfo=app_module.ACADEMIC_TIMEZONE),
     )
     with TestClient(app, follow_redirects=False) as staff:
         assert staff.get('/login').status_code==200
@@ -861,7 +861,7 @@ def test_aac_and_student_permissions(monkeypatch):
         assert student.get('/student/deadlines').status_code==200
         checkin_page=student.get('/student/checkin')
         assert checkin_page.status_code==200
-        assert 'Friday Oct 30 at 17:00' in checkin_page.text
+        assert 'Friday Nov 06 at 17:00' in checkin_page.text
         assert 'Submit Weekly Check-in' in checkin_page.text
         assert student.get('/student/meetings').status_code==200
         assert student.get('/aac/students').status_code==403
@@ -916,6 +916,18 @@ def test_weekly_checkin_window_uses_bishkek_time():
     assert opened['status']=='open' and opened['week_key']=='2026-10-19'
     assert sunday['status']=='open'
     assert monday['status']=='closed' and monday['next_opens_at'].isoformat().startswith('2026-10-30T17:00:00')
+
+    override_id=db.run('''INSERT INTO students
+        (student_code,name,email,program,year,gpa,credit_load,advisor,status,attention,avatar)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)''',(
+        'CHECKIN-54321','Aibek Aibekov','urustemov_se@auca.kg','ECO',2,2.92,0,
+        'Umut Kydyrgychova','On Track','Regular','AA',
+    ))
+    override=app_module.weekly_checkin_state(
+        override_id,datetime(2026,11,2,12,0,tzinfo=tz)
+    )
+    assert override['status']=='open' and override['is_override']
+    assert override['window_label']=='Extended access is open for this account'
 
 
 def test_google_workspace_login_requires_allowlisted_active_user(monkeypatch):

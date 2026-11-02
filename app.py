@@ -70,6 +70,13 @@ ALLOWED_HOSTS = [
 LOGIN_RATE_LIMIT = int(os.getenv('LOGIN_RATE_LIMIT', '20' if IS_PRODUCTION else '1000'))
 LOGIN_RATE_WINDOW_SECONDS = int(os.getenv('LOGIN_RATE_WINDOW_SECONDS', '900'))
 ACADEMIC_TIMEZONE = ZoneInfo(os.getenv('ACADEMIC_TIMEZONE', 'Asia/Bishkek'))
+CHECKIN_ALWAYS_OPEN_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv(
+        'CHECKIN_ALWAYS_OPEN_EMAILS', 'urustemov_se@auca.kg'
+    ).split(',')
+    if email.strip()
+}
 CANONICAL_HOST = os.getenv('CANONICAL_HOST', '').strip().lower()
 CANONICAL_ALIAS_HOSTS = {
     host.strip().lower() for host in os.getenv('CANONICAL_ALIAS_HOSTS', '').split(',')
@@ -395,9 +402,14 @@ def weekly_checkin_state(student_id, now=None):
         'SELECT * FROM checkins WHERE student_id=? AND week_key=? ORDER BY id DESC LIMIT 1',
         (student_id, week_key),
     )
+    student = one('SELECT email FROM students WHERE id=?', (student_id,))
+    always_open = bool(
+        student
+        and str(student.get('email', '')).strip().casefold() in CHECKIN_ALWAYS_OPEN_EMAILS
+    )
     if submission:
         status = 'completed'
-    elif opens_at <= now <= closes_at:
+    elif always_open or opens_at <= now <= closes_at:
         status = 'open'
     else:
         status = 'closed'
@@ -410,14 +422,19 @@ def weekly_checkin_state(student_id, now=None):
         'status': status,
         'is_open': status == 'open',
         'is_completed': status == 'completed',
+        'is_override': always_open,
         'week_key': week_key,
         'submission': submission,
         'opens_at': opens_at,
         'closes_at': closes_at,
         'next_opens_at': next_opens_at,
         'window_label': (
-            f"Friday {opens_at.strftime('%b %d')} at 17:00 – "
-            f"Sunday {closes_at.strftime('%b %d')} at 23:59"
+            'Extended access is open for this account'
+            if always_open
+            else (
+                f"Friday {opens_at.strftime('%b %d')} at 17:00 – "
+                f"Sunday {closes_at.strftime('%b %d')} at 23:59"
+            )
         ),
         'next_open_label': next_opens_at.strftime('%A, %b %d at %H:%M'),
     }
