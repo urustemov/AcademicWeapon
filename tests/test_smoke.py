@@ -583,6 +583,8 @@ def test_advising_team_can_manage_events_and_imported_whiteboard_rows():
         add_page=team.get('/aac/events?add=1')
         assert 'Add an event' in add_page.text
         assert 'id="new-event-title"' in add_page.text
+        assert 'Confirmed' not in add_page.text
+        assert all(status in add_page.text for status in ('Planned','Done','Cancelled'))
         seeded=db.one('SELECT id FROM events WHERE source_key=?',('whiteboard-2026-19',))
         edit_page=team.get(f'/aac/events?edit={seeded["id"]}')
         assert f'id="event-title-{seeded["id"]}"' in edit_page.text
@@ -595,7 +597,7 @@ def test_advising_team_can_manage_events_and_imported_whiteboard_rows():
         assert invalid.status_code==400
         created=team.post('/aac/events',data={
             '_csrf':csrf,'title':'New Advising Workshop','event_date':'2026-11-05',
-            'start_time':'15:00','end_time':'16:00','room':'410','status':'Confirmed',
+            'start_time':'15:00','end_time':'16:00','room':'410','status':'Planned',
         })
         assert created.status_code==303
         event=db.one('SELECT * FROM events WHERE title=?',('New Advising Workshop',))
