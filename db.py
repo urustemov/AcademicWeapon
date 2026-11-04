@@ -273,6 +273,12 @@ def seed_database():
         if 'synced_at' not in student_columns:
             con.execute('ALTER TABLE students ADD COLUMN synced_at TEXT')
         con.execute("UPDATE students SET status='On Track' WHERE status='Active Plan'")
+        # Keep the human-facing AUCA Student ID grouping consistent with the
+        # other five-digit records. The internal students.id key is unchanged.
+        con.execute(
+            "UPDATE students SET student_code='54 321' "
+            "WHERE name='Aibek Aibekov' AND REPLACE(student_code,' ','')='54321'"
+        )
         con.execute("UPDATE students SET status='Needs Review' WHERE status='Semester Review'")
         con.execute(
             "UPDATE students SET status='Initial Assessment' "
