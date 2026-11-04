@@ -502,11 +502,21 @@ def year_label(value):
         return value or '—'
 
 
+def student_code_label(value):
+    """Format five-digit AUCA Student IDs as XX XXX for display only."""
+    original = str(value or '').strip()
+    compact = ''.join(original.split())
+    if len(compact) == 5 and compact.isdigit():
+        return f'{compact[:2]} {compact[2:]}'
+    return original or '—'
+
+
 templates.env.filters['nice_date'] = nice_date
 templates.env.filters['nice_datetime'] = nice_datetime
 templates.env.filters['nice_activity_datetime'] = nice_activity_datetime
 templates.env.filters['initials'] = initials
 templates.env.filters['year_label'] = year_label
+templates.env.filters['student_code'] = student_code_label
 templates.env.filters['last_seen_label'] = last_seen_label
 templates.env.globals['case_statuses'] = CASE_STATUSES
 templates.env.globals['attention_levels'] = ATTENTION_LEVELS
