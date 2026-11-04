@@ -11,7 +11,7 @@
 <div class="profile-heading">
   <span class="profile-avatar">{{ student.avatar }}</span>
   <div class="profile-identity">
-    <div class="eyebrow dark">{{ student.student_code }} · {{ student.year|year_label|upper }}</div>
+    <div class="eyebrow dark">{{ student.student_code|student_code }} · {{ student.year|year_label|upper }}</div>
     <h1>{{ student.name }}</h1>
     <span>{{ student.program }}</span>
   </div>
